@@ -1,0 +1,394 @@
+--- a/CLAUDE.md	2026-09-10 18:04:56.000000000 +0700
++++ b/CLAUDE.md	2026-09-10 21:44:19.486150712 +0700
+@@ -1,4 +1,4 @@
+-# SIGAMON v6.17.10
++# SIGAMON v6.17.11
+ 
+ Workspace pengembangan plugin QGIS SIGAMON. Judul Proyek adalah batas data
+ tertinggi: dua Judul Proyek tetap dua dataset walaupun desa, nama Lokasi
+--- a/README.txt	2026-09-10 18:04:54.000000000 +0700
++++ b/README.txt	2026-09-10 21:44:18.714132588 +0700
+@@ -1,4 +1,5 @@
+-SIGAMON v6.17.10
++SIGAMON v6.17.11
++Lihat AUDIT_v6.17.11.md untuk penyamaan konsep tabel sheet Tiang dengan Kabel.
+ Lihat AUDIT_v6.17.10.md untuk hotfix migrasi kapitalisasi nama sheet.
+ Lihat AUDIT_v6.17.9.md untuk tiga sheet monitoring progress dan penamaan
+ `Konstruksi Tiang`.
+--- a/metadata.txt	2026-09-10 18:05:06.000000000 +0700
++++ b/metadata.txt	2026-09-10 21:44:15.478056625 +0700
+@@ -1,10 +1,11 @@
+ [general]
+-name=SIGAMON v6.17.10 Gambar, Analisis, dan Monitoring Jaringan
++name=SIGAMON v6.17.11 Gambar, Analisis, dan Monitoring Jaringan
+ qgisMinimumVersion=3.0
+ author=SIGAMON — UP2K Sulawesi Utara
+ email=
+-version=6.17.10
+-changelog=v6.17.10: Hotfix migrasi nama tab Konstruksi Tiang. Google Sheets membandingkan nama tab tanpa membedakan kapitalisasi; SIGAMON kini mengenali KONSTRUKSI TIANG sebagai tab lama, mengganti namanya melalui rename aman berbasis sheetId, membaca ulang metadata, lalu melanjutkan struktur dan penulisan tanpa addSheet duplikat. Lihat AUDIT_v6.17.10.md.
++version=6.17.11
++changelog=v6.17.11: Sheet Tiang kini memakai konsep tabel panjang yang sama dengan Kabel: satu baris per Lokasi Proyek, klasifikasi/spesifikasi, dan Tahap Data (Rencana Awal, Rencana Akhir, Realisasi). Identitas proyek, target Rencana Akhir, alokasi, deviasi, status, filter, urutan fase, pemisahan TM/TR, dan cakupan seluruh lokasi dipertahankan secara eksplisit. Konstruksi Tiang serta seluruh logika BOQ/kabel/QGIS tidak diubah. Lihat AUDIT_v6.17.11.md.
++    v6.17.10: Hotfix migrasi nama tab Konstruksi Tiang. Google Sheets membandingkan nama tab tanpa membedakan kapitalisasi; SIGAMON kini mengenali KONSTRUKSI TIANG sebagai tab lama, mengganti namanya melalui rename aman berbasis sheetId, membaca ulang metadata, lalu melanjutkan struktur dan penulisan tanpa addSheet duplikat. Lihat AUDIT_v6.17.10.md.
+     v6.17.9: Menambahkan Progress per Lokasi, Progress per UP3, dan Progress per Judul Proyek dari satu sumber master lokasi. Agregasi UP3 memakai kombinasi Judul Proyek plus UP3; agregasi proyek dihitung langsung dari seluruh lokasi agar berbobot benar. Nama sheet KONSTRUKSI TIANG diubah menjadi Konstruksi Tiang dan nama lama dibersihkan saat sync. Struktur final delapan sheet tetap tanpa kolom Desa; BOQ dan logika teknis tidak diubah. Lihat AUDIT_v6.17.9.md.
+     v6.17.8: Google Spreadsheet kembali tepat lima sheet final; tab RINGKASAN KEBUTUHAN, Rencana Awal, Rencana Akhir, dan Realisasi dibersihkan saat sync. Kolom Desa, Desa Asal, dan Desa Tujuan dihapus hanya dari output Spreadsheet; Lokasi Proyek menjadi identitas lokasi output. Data Desa internal QGIS, tiga Tahap, BOQ, kabel, sagging, tambahan konstruksi, CEIL, underbuild, TM/TR, TM-4X, koordinat, dan sync multi-lokasi tidak diubah. Lihat AUDIT_v6.17.8.md.
+     v6.17.1: PERBAIKAN "Google menolak permintaan (HTTP 400)" pada Sync Google Spreadsheet. AKARNYA UKURAN PERMINTAAN, BUKAN IZIN DAN BUKAN DATA YANG RUSAK. Google menolak satu body batchUpdate di atas 10 MB dengan HTTP 400, dan dua jalur menembusnya pada project besar. (1) PENULISAN NILAI. Seluruh workbook dikirim dalam SATU updateCells, sedangkan updateCells membungkus tiap sel menjadi {"userEnteredValue": {...}} -- sekitar 50 byte per sel. Sheet Titik Koordinat 12.000 baris x 18 kolom sudah 10,7 MB; 24.000 baris menjadi 21 MB dan 66.000 baris menjadi 59 MB. Sejak v6.17.0 aset eksisting dilaporkan pada ketiga tahap, sehingga jumlah barisnya bertambah dan project yang dahulu pas-pasan kini melewatinya. Penulisan nilai kini DIPECAH menurut ukuran: potongan pertama tiap sheet tetap memakai rentang tak terbatas sehingga sheet dibersihkan lebih dahulu, potongan berikutnya dibatasi baris dan hanya mengisi ekornya. Tidak ada baris yang hilang, tidak ada yang ganda, dan data yang menyusut tetap tidak meninggalkan ekor lama. (2) PENULISAN FORMAT. Sheet dengan kolom status (Kabel, Tiang, KONSTRUKSI TIANG) menghasilkan TIGA request format per baris data -- 60.000 request berukuran 16 MB untuk 20.000 baris. Baris berurutan yang kolom dan nilainya sama kini digabung menjadi satu rentang; sel yang diformat sama sekali tidak berubah, yang digabung hanya request-nya. (3) LAPISAN PENGIRIMAN. Struktur, format, dan nilai sama-sama dikirim lewat request_batches() yang memecah daftar request menjadi body-body di bawah anggaran 6 MB sambil MEMPERTAHANKAN URUTAN -- urutan itu bagian dari kebenarannya. Workbook kecil tetap menghasilkan TEPAT SATU body, jadi perilakunya tidak berubah. (4) PESAN HTTP 400 kini menyebut sebabnya (paket data terlalu besar atau rentang sel tidak valid) beserta pesan asli Google, dan menegaskan data SIGAMON tidak berubah. Tidak ada perubahan pada isi sheet, struktur kolom, layer, GeoPackage, BOQ, atau geometri. Lihat AUDIT_v6.17.1.md.
+--- a/plugin.py	2026-09-10 18:04:26.000000000 +0700
++++ b/plugin.py	2026-09-10 21:44:17.894113342 +0700
+@@ -413,7 +413,7 @@
+             return None
+ 
+ # Versi plugin untuk ditampilkan kecil pada header panel (informasi saja).
+-PLN_TOOLS_VERSION = "v6.17.10"
++PLN_TOOLS_VERSION = "v6.17.11"
+ DXF_LAST_EXPORT_FOLDER_KEY = "PLNTools/dxf_last_export_folder"
+ PREVIEW_LAST_EXPORT_FOLDER_KEY = "PLNTools/preview_last_export_folder"
+ 
+--- a/spreadsheet_schema.py	2026-09-10 17:34:56.000000000 +0700
++++ b/spreadsheet_schema.py	2026-09-10 21:38:41.018203061 +0700
+@@ -2142,25 +2142,23 @@
+ # ---------------------------------------------------------------------------
+ # SHEET 2 -- TIANG (§C)
+ # ---------------------------------------------------------------------------
+-#: Sheet ``Tiang`` = JENIS TIANG saja. Ketiga tahap berdiri sebagai KOLOM
+-#: pada satu baris, bukan sebagai tiga baris "Tahap Data": satu baris sudah
+-#: menjawab "berapa TM dan TR pada Rencana Awal, Rencana Akhir, dan
+-#: Realisasi", dan hanya bentuk inilah yang dapat membawa kolom Perubahan.
++#: Sheet ``Tiang`` mengikuti pola tabel panjang sheet ``Kabel``: satu baris
++#: per lokasi × klasifikasi × jenis × Tahap Data.
+ POLE_HEADERS = (
+     ["No"] + PROJECT_COLUMNS
+-    + ["Jenis Tiang", "Jenis / Spesifikasi",
+-       "Rencana Awal", "Rencana Akhir", "Perubahan",
+-       "Realisasi", "Status Realisasi", "Alokasi Saat Ini", "Tanggal Update"]
++    + ["Klasifikasi Tiang", "Jenis / Spesifikasi", "Tahap Data",
++       "Jumlah Tiang", "Target Rencana Akhir", "Alokasi Saat Ini",
++       "Saldo / Deviasi", "Status", "Tanggal Update"]
+ )
+ POLE_WIDTH = len(POLE_HEADERS)
+ POLE_COLUMN_WIDTHS = [
+     45, 190, 180, 110, 110, 150, 150, 160, 160,
+-    120, 190, 120, 125, 140, 110, 145, 130, 140,
++    135, 190, 120, 115, 145, 130, 130, 110, 140,
+ ]
+ 
+-#: Kolom 1-based "Rencana Awal"; ketiga angka tahap dan Alokasi mengikutinya.
+-POLE_PLAN_COLUMN = len(PROJECT_COLUMNS) + 4        # "Rencana Awal"
+-POLE_STATUS_COLUMN = POLE_WIDTH - 2                # "Status Realisasi"
++#: Kolom 1-based Tahap Data dan Status, paralel dengan sheet Kabel.
++POLE_STAGE_COLUMN = len(PROJECT_COLUMNS) + 4
++POLE_STATUS_COLUMN = POLE_WIDTH - 1
+ 
+ #: Sheet ``KONSTRUKSI TIANG`` = KODE KONSTRUKSI saja (TR-1, TM-4X, TM-TP2,
+ #: ...). Bentuk kolomnya sengaja SAMA PERSIS dengan sheet ``Tiang`` -- hanya
+@@ -2173,8 +2171,11 @@
+        "Realisasi", "Status Realisasi", "Alokasi Saat Ini", "Tanggal Update"]
+ )
+ CONSTRUCTION_WIDTH = len(CONSTRUCTION_HEADERS)
+-CONSTRUCTION_COLUMN_WIDTHS = list(POLE_COLUMN_WIDTHS)
+-CONSTRUCTION_PLAN_COLUMN = POLE_PLAN_COLUMN
++CONSTRUCTION_COLUMN_WIDTHS = [
++    45, 190, 180, 110, 110, 150, 150, 160, 160,
++    120, 190, 120, 125, 140, 110, 145, 130, 140,
++]
++CONSTRUCTION_PLAN_COLUMN = len(PROJECT_COLUMNS) + 4
+ CONSTRUCTION_STATUS_COLUMN = CONSTRUCTION_WIDTH - 2
+ 
+ 
+@@ -2226,9 +2227,9 @@
+     baris konstruksi yang satuannya sama sekali berbeda artinya. Dua
+     pertanyaan yang berbeda memang layak mendapat dua tabel.
+ 
+-    Ketiga tahap berdiri sebagai KOLOM, bukan tiga baris: satu baris sudah
+-    menjawab berapa batang pada Rencana Awal, Rencana Akhir, dan Realisasi,
+-    sekaligus membawa Perubahan dan Status Realisasi-nya.
++    Seperti sheet Kabel, ketiga tahap berdiri sebagai BARIS pada kolom
++    ``Tahap Data``. Target selalu Rencana Akhir; Saldo/Deviasi dan Status
++    memakai definisi yang sama dengan Kabel.
+ 
+     Seperti sheet Kabel, metadata proyek di-resolve PER BARIS dari
+     ``id_lokasi`` milik tiang itu sendiri (§4), sehingga setiap Lokasi Proyek
+@@ -2240,20 +2241,42 @@
+     index = _metadata_index(snapshot)
+     data = dict(snapshot.get("kontrol_tiang") or {})
+     updated = display_time(snapshot.get("generated"))
+-    table = FlatTable(SHEET_POLES, POLE_HEADERS, POLE_COLUMN_WIDTHS).numbers(
+-        _stage_number_formats(POLE_PLAN_COLUMN)
+-    ).status_column(POLE_STATUS_COLUMN)
++    table = FlatTable(SHEET_POLES, POLE_HEADERS, POLE_COLUMN_WIDTHS).numbers({
++        POLE_STAGE_COLUMN + 1: _UNIT_FORMAT,
++        POLE_STAGE_COLUMN + 2: _UNIT_FORMAT,
++        POLE_STAGE_COLUMN + 3: _UNIT_FORMAT,
++        POLE_STAGE_COLUMN + 4: _UNIT_FORMAT,
++    }).status_column(POLE_STATUS_COLUMN)
+ 
+     number = 0
+     for key, label in POLE_CLASSIFICATIONS:
+         for entry, metadata in _merge_stage_entries(
+             data.get(key), index, context, "spesifikasi"
+         ):
+-            number += 1
+-            table.add([number] + control_context_cells(metadata) + [
+-                label,
+-                clean(entry.get("spesifikasi")) or UNSPECIFIED_SPEC,
+-            ] + _pole_comparison_cells(entry, updated))
++            target = _number(entry.get("rencana_akhir"))
++            allocated = _number(entry.get("alokasi"))
++            figures = {
++                "Rencana Awal": (_number(entry.get("rencana_awal")), True),
++                "Rencana Akhir": (target, True),
++                "Realisasi": (
++                    _number(entry.get("realisasi")),
++                    bool(entry.get("ada_realisasi")),
++                ),
++            }
++            for stage_label in STAGE_ROW_LABELS:
++                amount, available = figures[stage_label]
++                number += 1
++                table.add([number] + control_context_cells(metadata) + [
++                    label,
++                    clean(entry.get("spesifikasi")) or UNSPECIFIED_SPEC,
++                    stage_label,
++                    amount if available else "",
++                    target,
++                    allocated,
++                    (amount - target) if available else "",
++                    control_status(amount, target, available),
++                    updated,
++                ])
+     return table.finish()
+ 
+ 
+--- a/tests/test_audit_implementation.py	2026-09-10 17:40:18.000000000 +0700
++++ b/tests/test_audit_implementation.py	2026-09-10 21:42:35.659677379 +0700
+@@ -158,7 +158,7 @@
+         snapshot={'kontrol_tiang':{'tm':[{'jenis':'TM 12','awal':1,'akhir':1,'realisasi':1,'id_lokasi':'A','lokasi':'Lokasi A'}],
+             'konstruksi':[{'jenis':'TR-3','awal':2,'akhir':2,'realisasi':1,'id_lokasi':'A','lokasi':'Lokasi A'}]}}
+         layouts=dict(schema.build_control_payload(snapshot))
+-        self.assertEqual(2,layouts['Tiang'].used_rows())
++        self.assertEqual(4,layouts['Tiang'].used_rows())
+         self.assertEqual(2,layouts['Konstruksi Tiang'].used_rows())
+ if __name__=='__main__':unittest.main()
+ 
+@@ -211,7 +211,7 @@
+         snapshot['source_counts']={'Kabel':9,'Tiang':9,'Konstruksi Tiang':9,'Titik Koordinat':9,'Pindah Lokasi':1}
+         outputs=schema.validate_control_snapshot(snapshot,schema.build_control_payload(snapshot))
+         self.assertEqual({
+-            'Kabel': 18, 'Tiang': 3, 'Konstruksi Tiang': 6,
++            'Kabel': 18, 'Tiang': 9, 'Konstruksi Tiang': 6,
+             'Titik Koordinat': 9, 'Pindah Lokasi': 1,
+             'Progress per Lokasi': 0, 'Progress per UP3': 0,
+             'Progress per Judul Proyek': 0,
+--- a/tests/test_control_sheets.py	2026-09-10 18:03:18.000000000 +0700
++++ b/tests/test_control_sheets.py	2026-09-10 21:44:58.387061145 +0700
+@@ -653,20 +653,22 @@
+     def test_the_columns_match_the_specification(self):
+         self.assertEqual(
+             ["No", "Proyek", "Lokasi Proyek", "Tahap", "Paket", "UP3",
+-             "ULP", "Vendor MDU", "Vendor Jasa", "Jenis Tiang",
+-             "Jenis / Spesifikasi", "Rencana Awal", "Rencana Akhir",
+-             "Perubahan", "Realisasi", "Status Realisasi",
+-             "Alokasi Saat Ini", "Tanggal Update"],
++             "ULP", "Vendor MDU", "Vendor Jasa", "Klasifikasi Tiang",
++             "Jenis / Spesifikasi", "Tahap Data", "Jumlah Tiang",
++             "Target Rencana Akhir", "Alokasi Saat Ini", "Saldo / Deviasi",
++             "Status", "Tanggal Update"],
+             schema.POLE_HEADERS,
+         )
+ 
+     def test_only_the_physical_pole_types_appear(self):
+-        self.assertEqual({"TM", "TR"}, set(column(self.layout, "Jenis Tiang")))
++        self.assertEqual(
++            {"TM", "TR"}, set(column(self.layout, "Klasifikasi Tiang"))
++        )
+ 
+     def test_no_construction_code_leaks_into_this_sheet(self):
+         """TEST 1 — TR-1/TR-3/TM-4/dst. bukan jenis tiang."""
+         self.assertNotIn("Konstruksi", header(self.layout))
+-        values = set(column(self.layout, "Jenis Tiang"))
++        values = set(column(self.layout, "Klasifikasi Tiang"))
+         for code in ("TM-1", "TR-2", "TR-1", "TM-4", "TM-4X", "TM-TP2"):
+             self.assertNotIn(code, values)
+         # Tidak ada satu pun sel yang berbentuk kode konstruksi.
+@@ -674,21 +676,70 @@
+             for cell in row:
+                 self.assertNotRegex(str(cell), r"^T[MR]-")
+ 
+-    def test_one_row_carries_all_three_stages(self):
+-        """1 TM + 1 TR = dua baris; tahapnya kolom, bukan baris."""
+-        self.assertEqual(2, len(body(self.layout)))
+-        entry = rows_where(self.layout, **{"Jenis Tiang": "TM"})[0]
+-        self.assertEqual(25, entry["Rencana Awal"])
+-        self.assertEqual(22, entry["Rencana Akhir"])
+-        self.assertEqual(21, entry["Realisasi"])
+-
+-    def test_the_design_change_compares_the_two_plans(self):
+-        entry = rows_where(self.layout, **{"Jenis Tiang": "TM"})[0]
+-        self.assertEqual("Berkurang 3", entry["Perubahan"])
++    def test_one_row_per_type_and_stage_like_cable(self):
++        """1 TM + 1 TR, masing-masing tiga Tahap Data = enam baris."""
++        self.assertEqual(6, len(body(self.layout)))
++        self.assertEqual(
++            {"Rencana Awal", "Rencana Akhir", "Realisasi"},
++            set(column(self.layout, "Tahap Data")),
++        )
++        rows = {
++            row["Tahap Data"]: row for row in rows_where(
++                self.layout, **{"Klasifikasi Tiang": "TM"}
++            )
++        }
++        self.assertEqual(25, rows["Rencana Awal"]["Jumlah Tiang"])
++        self.assertEqual(22, rows["Rencana Akhir"]["Jumlah Tiang"])
++        self.assertEqual(21, rows["Realisasi"]["Jumlah Tiang"])
++
++    def test_each_type_uses_the_same_stage_order_as_cable(self):
++        expected = list(schema.STAGE_ROW_LABELS)
++        for classification in ("TM", "TR"):
++            self.assertEqual(
++                expected,
++                [row["Tahap Data"] for row in rows_where(
++                    self.layout, **{"Klasifikasi Tiang": classification}
++                )],
++            )
++
++    def test_all_locations_are_written_with_their_own_metadata(self):
++        layout = schema.build_tiang_layout(two_location_snapshot())
++        self.assertEqual(
++            {"Kali Selatan", "Talawaan"},
++            set(column(layout, "Lokasi Proyek")),
++        )
++        self.assertEqual(6, len(body(layout)))
++        by_location = {
++            row["Lokasi Proyek"]: row
++            for row in rows_where(layout, **{"Tahap Data": "Rencana Awal"})
++        }
++        self.assertEqual("PT MDU JAYA", by_location["Kali Selatan"]["Vendor MDU"])
++        self.assertEqual("PT MDU LAIN", by_location["Talawaan"]["Vendor MDU"])
++
++    def test_filter_covers_the_whole_tiang_table(self):
++        self.assertEqual(1, self.layout.frozen_rows)
++        self.assertEqual(
++            [(1, 1, len(schema.POLE_HEADERS), len(self.layout.values))],
++            self.layout.filters,
++        )
++
++    def test_each_stage_deviation_is_measured_against_final_plan(self):
++        rows = {
++            row["Tahap Data"]: row for row in rows_where(
++                self.layout, **{"Klasifikasi Tiang": "TM"}
++            )
++        }
++        self.assertEqual(3, rows["Rencana Awal"]["Saldo / Deviasi"])
++        self.assertEqual(0, rows["Rencana Akhir"]["Saldo / Deviasi"])
++        self.assertEqual(-1, rows["Realisasi"]["Saldo / Deviasi"])
+ 
+     def test_the_status_compares_realisation_to_the_final_plan(self):
+-        entry = rows_where(self.layout, **{"Jenis Tiang": "TM"})[0]
+-        self.assertEqual("Kurang 1", entry["Status Realisasi"])
++        entry = rows_where(
++            self.layout, **{"Klasifikasi Tiang": "TM", "Tahap Data": "Realisasi"}
++        )[0]
++        # Selisih 1 dari target 22 masih berada dalam toleransi kontrol
++        # existing (5%), sama persis dengan perilaku sheet Kabel.
++        self.assertEqual("Sesuai", entry["Status"])
+ 
+     def test_missing_realisation_is_reported_as_belum_dihitung(self):
+         data = snapshot()
+@@ -697,10 +748,10 @@
+             "tr": [], "konstruksi": [],
+         }
+         layout = schema.build_tiang_layout(data)
+-        entry = body(layout)[0]
+-        row = dict(zip(header(layout), entry))
+-        self.assertEqual("Belum Dihitung", row["Status Realisasi"])
+-        self.assertEqual("", row["Realisasi"])
++        row = rows_where(layout, **{"Tahap Data": "Realisasi"})[0]
++        self.assertEqual("", row["Jumlah Tiang"])
++        self.assertEqual("", row["Saldo / Deviasi"])
++        self.assertEqual("Belum Dihitung", row["Status"])
+ 
+     def test_there_is_no_total_row_to_double_count_a_pole(self):
+         """Tanpa baris total, satu tiang tidak dapat terhitung dua kali."""
+@@ -845,7 +896,7 @@
+         layouts = dict(schema.build_control_payload(data))
+         self.assertEqual(
+             set(),
+-            set(column(layouts[schema.SHEET_POLES], "Jenis Tiang"))
++            set(column(layouts[schema.SHEET_POLES], "Jenis / Spesifikasi"))
+             & set(column(layouts[schema.SHEET_KONSTRUKSI], "Konstruksi")),
+         )
+         # Mengosongkan kunci konstruksi hanya mengosongkan sheet konstruksi;
+@@ -853,7 +904,7 @@
+         data["kontrol_tiang"] = dict(data["kontrol_tiang"], konstruksi=[])
+         layouts = dict(schema.build_control_payload(data))
+         self.assertEqual([], body(layouts[schema.SHEET_KONSTRUKSI]))
+-        self.assertEqual(2, len(body(layouts[schema.SHEET_POLES])))
++        self.assertEqual(6, len(body(layouts[schema.SHEET_POLES])))
+ 
+ 
+ class StageComparisonLabelTests(unittest.TestCase):
+--- a/tests/test_project_isolation.py	2026-09-10 17:34:56.000000000 +0700
++++ b/tests/test_project_isolation.py	2026-09-10 21:42:36.511697755 +0700
+@@ -360,9 +360,11 @@
+             pole("LOC-2027", "Tiang TM", 3, 3, 3),
+         ]))
+         entries = rows(layout)
+-        self.assertEqual(2, len(entries))
++        self.assertEqual(6, len(entries))
++        initial = [entry for entry in entries
++                   if entry["Tahap Data"] == "Rencana Awal"]
+         self.assertEqual(
+-            {5, 3}, {entry["Rencana Awal"] for entry in entries}
++            {5, 3}, {entry["Jumlah Tiang"] for entry in initial}
+         )
+ 
+     def test_every_row_carries_its_judul_proyek(self):
+--- a/AUDIT_v6.17.11.md	1970-01-01 08:00:00.000000000 +0800
++++ b/AUDIT_v6.17.11.md	2026-09-10 21:44:20.254168740 +0700
+@@ -0,0 +1,30 @@
++# Audit SIGAMON v6.17.11
++
++## Ruang lingkup
++
++Perubahan hanya pada penyajian output Google Spreadsheet sheet `Tiang`.
++Generator BOQ, kebutuhan kabel, sagging, tambahan konstruksi, koordinat,
++`Konstruksi Tiang`, `Pindah Lokasi`, F11, Preview Maps, dan DXF tidak diubah.
++
++## Implementasi
++
++Sheet `Tiang` kini memakai tabel panjang seperti sheet `Kabel`. Setiap
++kombinasi Lokasi Proyek, klasifikasi TM/TR, dan spesifikasi menghasilkan tiga
++baris berurutan: `Rencana Awal`, `Rencana Akhir`, lalu `Realisasi`.
++
++Setiap baris membawa identitas `Proyek`, `Lokasi Proyek`, `Tahap`, `Paket`,
++`UP3`, `ULP`, `Vendor MDU`, dan `Vendor Jasa`. Kolom kontrolnya adalah
++`Jumlah Tiang`, `Target Rencana Akhir`, `Alokasi Saat Ini`,
++`Saldo / Deviasi`, dan `Status`. Status memakai fungsi serta toleransi existing
++yang sama dengan sheet `Kabel`; realisasi yang belum tersedia tetap tampil
++`Belum Dihitung` dan bukan nol palsu.
++
++TM dan TR tidak digabung. Sumber tetap snapshot seluruh lokasi dalam Judul
++Proyek aktif, bukan lokasi yang sedang dipilih pada F11. Filter bawaan mencakup
++seluruh header tabel dan header tetap dibekukan oleh formatter bersama.
++
++## Isolasi perubahan
++
++Konstanta lebar dan indeks kolom `Konstruksi Tiang` dipisahkan dari `Tiang`
++agar perubahan bentuk tabel Tiang tidak menggeser format tabel konstruksi.
++Tidak ada sheet baru dan tidak ada variasi nama sheet `Tiang`.
+--- a/TEST_MATRIX_v6.17.11.md	1970-01-01 08:00:00.000000000 +0800
++++ b/TEST_MATRIX_v6.17.11.md	2026-09-10 21:44:21.030186980 +0700
+@@ -0,0 +1,14 @@
++# Test Matrix SIGAMON v6.17.11
++
++| Skenario | Hasil wajib |
++|---|---|
++| Struktur Tiang | Identitas proyek diikuti klasifikasi, spesifikasi, Tahap Data, jumlah, target, alokasi, deviasi, status |
++| Urutan fase | Rencana Awal → Rencana Akhir → Realisasi untuk setiap jenis/lokasi |
++| TM/TR | Tetap menjadi klasifikasi terpisah |
++| Target dan deviasi | Setiap fase dibandingkan terhadap Rencana Akhir |
++| Realisasi kosong | Jumlah/deviasi kosong dan status `Belum Dihitung` |
++| Status | Memakai fungsi dan toleransi yang sama dengan Kabel |
++| Multi-lokasi | Seluruh Lokasi Proyek tetap masuk dan tidak tercampur |
++| Filter/format | Filter seluruh header, freeze header, format angka dan status aktif |
++| Konstruksi Tiang | Struktur tabel existing tidak berubah |
++| Regresi | BOQ, kabel, sagging, koordinat, tahap gambar, progress, sinkronisasi, F11, dan DXF tetap lulus |
