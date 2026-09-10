@@ -4,15 +4,16 @@ Sistem Informasi Gambar, Analisis, dan Monitoring Jaringan Kelistrikan untuk QGI
 
 ## Rilis terbaru
 
-**v6.17.11 — Tabel Tiang Selaras dengan Kabel**
+**v6.17.12 — Edit Jarak Tanpa Menggeser Jaringan**
 
-- Sheet `Tiang` kini memakai tabel panjang per Lokasi Proyek, klasifikasi/spesifikasi, dan Tahap Data.
-- Urutan fase konsisten: Rencana Awal → Rencana Akhir → Realisasi.
-- TM dan TR tetap terpisah, dengan target Rencana Akhir, alokasi, deviasi, serta status seperti sheet `Kabel`.
-- Identitas Proyek, Lokasi Proyek, Tahap, Paket, UP3, ULP, Vendor MDU, dan Vendor Jasa tersedia pada setiap baris.
-- Filter seluruh header, freeze header, dan sinkronisasi seluruh lokasi tetap aktif.
-- `Konstruksi Tiang`, BOQ, kabel, sagging, koordinat, F11, Preview Maps, dan DXF tidak diubah.
-- Regression suite: 3.406 test lulus, 6 dilewati, 0 gagal.
+- Detail Tarikan menampilkan Jarak Geometri, Jarak Perhitungan, dan Status Jarak.
+- Tombol Ubah Jarak menyimpan override per gawang dan per Tahap Data.
+- Tombol Jarak Geometri menghapus override dan mengembalikan perhitungan otomatis.
+- Edit hanya mengubah atribut `manual_distance`; posisi tiang, koordinat, vertex, dan geometri jaringan tetap.
+- KMS, kebutuhan kabel, sagging, BOQ, Spreadsheet, dashboard, serta label memakai satu nilai jarak efektif.
+- SUTM tetap tiga fasa dengan sagging 2,5%; SUTR tetap memakai sagging 3%.
+- Proyek lama tanpa override tetap bekerja otomatis.
+- Regression suite: 3.416 test lulus, 6 dilewati, 0 gagal.
 
-Paket instalasi: `SIGAMON_v6.17.11.zip`.
-Patch sumber: [releases/SIGAMON_v6.17.11.patch](releases/SIGAMON_v6.17.11.patch).
+Paket instalasi: `SIGAMON_v6.17.12.zip`.
+Patch sumber: [releases/SIGAMON_v6.17.12.patch](releases/SIGAMON_v6.17.12.patch).
