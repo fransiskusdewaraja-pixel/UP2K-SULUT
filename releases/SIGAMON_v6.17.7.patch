@@ -1,0 +1,757 @@
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/AUDIT_v6.17.7.md work/pln_gambar_jaringan_sederhana_qgis4/AUDIT_v6.17.7.md
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/AUDIT_v6.17.7.md	1970-01-01 09:00:00.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/AUDIT_v6.17.7.md	2026-09-10 15:15:25.032729010 +0900
+@@ -0,0 +1,28 @@
++# AUDIT SIGAMON v6.17.7 — Detail Tarikan Google Spreadsheet
++
++## Implementasi
++
++- Menambahkan sheet `Rencana Awal`, `Rencana Akhir`, dan `Realisasi`.
++- Setiap baris detail mewakili satu gawang dan membawa ID stabil dari UUID
++  feature, pasangan tiang, atau fallback layer/FID existing.
++- Urutan gawang memakai traversal konektivitas; cabang diurutkan natural dan
++  semua edge tetap ditulis tepat sekali.
++- Underbuild dipisahkan menjadi baris SUTM dan SUTR.
++- KMS, sagging, serta tambahan konstruksi ditampilkan sebagai komponen berbeda.
++- Tambahan konstruksi SUTM dibebankan pada feature gawang yang membawa atribut
++  konstruksinya; tidak digabung ke persen sagging.
++- Baris ringkasan menampilkan KMS, tambahan sagging, tambahan konstruksi, dan
++  kebutuhan final per klasifikasi.
++- Detail memakai presisi sebenarnya dengan format tampilan satu desimal.
++  Pembulatan ke atas hanya dilakukan sekali pada total kebutuhan final.
++- Status Realisasi hanya dihitung pada baris ringkasan terhadap total Rencana
++  Akhir; tidak ada status per gawang.
++- `Titik Koordinat` dikelompokkan stabil dalam urutan Rencana Awal, Rencana
++  Akhir, lalu Realisasi tanpa mengacak urutan collector di dalam tahap.
++
++## Integritas
++
++- QGIS tetap menjadi sumber geometri dan konektivitas.
++- Setting sagging per tahap/per klasifikasi tetap memakai penyimpanan existing.
++- Sinkronisasi tetap mencakup seluruh lokasi dalam Judul Proyek aktif.
++- Request Google Sheets tetap melalui mekanisme batching existing.
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/CLAUDE.md work/pln_gambar_jaringan_sederhana_qgis4/CLAUDE.md
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/CLAUDE.md	2026-09-09 15:18:13.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/CLAUDE.md	2026-09-10 15:15:24.176766737 +0900
+@@ -1,4 +1,4 @@
+-# SIGAMON v6.17.1
++# SIGAMON v6.17.7
+ 
+ Workspace pengembangan plugin QGIS SIGAMON. Judul Proyek adalah batas data
+ tertinggi: dua Judul Proyek tetap dua dataset walaupun desa, nama Lokasi
+@@ -10,8 +10,9 @@
+ adalah STATUS objek, bukan tahap; ia tidak pernah menjadi nilai kolom "Tahap
+ Data" pada keluaran mana pun.
+ 
+-Google Spreadsheet berisi LIMA sheet data (Kabel, Tiang, KONSTRUKSI TIANG,
+-Pindah Lokasi, Titik Koordinat) dan tidak menyentuh Google Drive. Preview
++Google Spreadsheet berisi sembilan sheet data (Kabel, Tiang, KONSTRUKSI TIANG,
++Pindah Lokasi, RINGKASAN KEBUTUHAN, Rencana Awal, Rencana Akhir, Realisasi,
++Titik Koordinat) dan tidak menyentuh Google Drive. Preview
+ Maps adalah fitur QGIS saja — jangan mengintegrasikannya kembali ke
+ Spreadsheet.
+ 
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/README.txt work/pln_gambar_jaringan_sederhana_qgis4/README.txt
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/README.txt	2026-09-09 15:18:29.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/README.txt	2026-09-10 15:23:34.115203349 +0900
+@@ -1,4 +1,5 @@
+-SIGAMON v6.17.1
++SIGAMON v6.17.7
++Lihat AUDIT_v6.17.7.md untuk detail tarikan Google Spreadsheet per tahap.
+ Lihat AUDIT_v6.17.1.md untuk perbaikan HTTP 400 pada Sync Google Spreadsheet.
+ Lihat AUDIT_v6.17.0.md untuk pemisahan Tahap Data vs Status Tiang pada sheet
+ Titik Koordinat.
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/TEST_MATRIX_v6.17.7.md work/pln_gambar_jaringan_sederhana_qgis4/TEST_MATRIX_v6.17.7.md
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/TEST_MATRIX_v6.17.7.md	1970-01-01 09:00:00.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/TEST_MATRIX_v6.17.7.md	2026-09-10 15:23:37.711045319 +0900
+@@ -0,0 +1,13 @@
++# TEST MATRIX SIGAMON v6.17.7
++
++- [x] Jaringan lurus diurutkan dari akar ke ujung.
++- [x] Cabang ditelusuri deterministik dan setiap gawang muncul satu kali.
++- [x] Detail Rencana Awal, Rencana Akhir, dan Realisasi memakai ID stabil.
++- [x] Underbuild terpisah sebagai SUTM dan SUTR.
++- [x] KMS, tambahan sagging, dan tambahan konstruksi terpisah.
++- [x] Detail mempertahankan nilai presisi dengan format satu desimal.
++- [x] CEIL hanya diterapkan pada total kebutuhan kabel final.
++- [x] Status per gawang Realisasi kosong.
++- [x] Total Realisasi dibandingkan terhadap total Rencana Akhir.
++- [x] Titik Koordinat berurutan Rencana Awal → Rencana Akhir → Realisasi.
++- [x] Kompilasi Python dan regression suite dijalankan sebelum paket rilis.
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/boq_control.py work/pln_gambar_jaringan_sederhana_qgis4/boq_control.py
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/boq_control.py	2026-09-09 11:09:31.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/boq_control.py	2026-09-10 15:07:54.344567869 +0900
+@@ -349,6 +349,67 @@
+     return "{} → {}".format(dari, ke)
+ 
+ 
++def _natural_span_key(value):
++    """Kunci natural kecil untuk traversal topologi yang deterministik."""
++    return tuple(
++        int(part) if part.isdigit() else part.casefold()
++        for part in re.split(r"(\d+)", clean(value))
++    )
++
++
++def order_span_topology(spans):
++    """Urutkan feature gawang mengikuti konektivitas jaringan sebenarnya.
++
++    Setiap edge tetap muncul sekali. Akar komponen dipilih dari node dengan
++    indegree nol (umumnya Gardu/awal tarikan); cabang ditelusuri secara
++    depth-first dan diurutkan natural agar hasil sinkronisasi stabil. Untuk
++    data lama yang arahnya terbalik/berbentuk siklus, edge terkecil yang
++    belum dipakai menjadi akar cadangan tanpa menghilangkan data.
++    """
++    source = [dict(row or {}) for row in spans or ()]
++    outgoing, indegree = {}, {}
++    for index, row in enumerate(source):
++        start, end = clean(row.get("dari_tiang")), clean(row.get("ke_tiang"))
++        outgoing.setdefault(start, []).append(index)
++        indegree.setdefault(start, 0)
++        indegree[end] = indegree.get(end, 0) + 1
++    for values in outgoing.values():
++        values.sort(key=lambda i: (
++            _natural_span_key(source[i].get("id_jalur")),
++            _natural_span_key(source[i].get("ke_tiang")),
++            _natural_span_key(span_key(source[i])),
++        ))
++    roots = sorted(
++        (node for node in outgoing if indegree.get(node, 0) == 0),
++        key=_natural_span_key,
++    )
++    used, ordered = set(), []
++
++    def walk(node):
++        for index in outgoing.get(node, ()):
++            if index in used:
++                continue
++            used.add(index)
++            ordered.append(source[index])
++            walk(clean(source[index].get("ke_tiang")))
++
++    for root in roots:
++        walk(root)
++    while len(used) < len(source):
++        index = min(
++            (i for i in range(len(source)) if i not in used),
++            key=lambda i: (
++                _natural_span_key(source[i].get("dari_tiang")),
++                _natural_span_key(source[i].get("ke_tiang")),
++                _natural_span_key(span_key(source[i])),
++            ),
++        )
++        used.add(index)
++        ordered.append(source[index])
++        walk(clean(source[index].get("ke_tiang")))
++    return ordered
++
++
+ def build_span_rows(spans, sagging_map=None, default=SAGGING_DEFAULT_PERCENT):
+     """Baris Detail Tarikan lengkap dengan sagging dan kebutuhan kabelnya.
+ 
+@@ -448,6 +509,10 @@
+             "has_tr": has_tr,
+             "underbuild": bool(span.get("underbuild")),
+             "tipe_kabel_bawah": clean(span.get("tipe_kabel_bawah")),
++            "konstruksi_utama": clean(span.get("konstruksi_utama")),
++            "konstruksi_bawah": clean(span.get("konstruksi_bawah")),
++            "id_jalur": clean(span.get("id_jalur")),
++            "id_segmen": clean(span.get("id_segmen")),
+         })
+     return rows
+ 
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/metadata.txt work/pln_gambar_jaringan_sederhana_qgis4/metadata.txt
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/metadata.txt	2026-09-10 11:23:52.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/metadata.txt	2026-09-10 15:23:48.827614284 +0900
+@@ -1,10 +1,11 @@
+ [general]
+-name=SIGAMON v6.17.6 Gambar, Analisis, dan Monitoring Jaringan
++name=SIGAMON v6.17.7 Gambar, Analisis, dan Monitoring Jaringan
+ qgisMinimumVersion=3.0
+ author=SIGAMON — UP2K Sulawesi Utara
+ email=
+-version=6.17.6
+-changelog=v6.17.1: PERBAIKAN "Google menolak permintaan (HTTP 400)" pada Sync Google Spreadsheet. AKARNYA UKURAN PERMINTAAN, BUKAN IZIN DAN BUKAN DATA YANG RUSAK. Google menolak satu body batchUpdate di atas 10 MB dengan HTTP 400, dan dua jalur menembusnya pada project besar. (1) PENULISAN NILAI. Seluruh workbook dikirim dalam SATU updateCells, sedangkan updateCells membungkus tiap sel menjadi {"userEnteredValue": {...}} -- sekitar 50 byte per sel. Sheet Titik Koordinat 12.000 baris x 18 kolom sudah 10,7 MB; 24.000 baris menjadi 21 MB dan 66.000 baris menjadi 59 MB. Sejak v6.17.0 aset eksisting dilaporkan pada ketiga tahap, sehingga jumlah barisnya bertambah dan project yang dahulu pas-pasan kini melewatinya. Penulisan nilai kini DIPECAH menurut ukuran: potongan pertama tiap sheet tetap memakai rentang tak terbatas sehingga sheet dibersihkan lebih dahulu, potongan berikutnya dibatasi baris dan hanya mengisi ekornya. Tidak ada baris yang hilang, tidak ada yang ganda, dan data yang menyusut tetap tidak meninggalkan ekor lama. (2) PENULISAN FORMAT. Sheet dengan kolom status (Kabel, Tiang, KONSTRUKSI TIANG) menghasilkan TIGA request format per baris data -- 60.000 request berukuran 16 MB untuk 20.000 baris. Baris berurutan yang kolom dan nilainya sama kini digabung menjadi satu rentang; sel yang diformat sama sekali tidak berubah, yang digabung hanya request-nya. (3) LAPISAN PENGIRIMAN. Struktur, format, dan nilai sama-sama dikirim lewat request_batches() yang memecah daftar request menjadi body-body di bawah anggaran 6 MB sambil MEMPERTAHANKAN URUTAN -- urutan itu bagian dari kebenarannya. Workbook kecil tetap menghasilkan TEPAT SATU body, jadi perilakunya tidak berubah. (4) PESAN HTTP 400 kini menyebut sebabnya (paket data terlalu besar atau rentang sel tidak valid) beserta pesan asli Google, dan menegaskan data SIGAMON tidak berubah. Tidak ada perubahan pada isi sheet, struktur kolom, layer, GeoPackage, BOQ, atau geometri. Lihat AUDIT_v6.17.1.md.
++version=6.17.7
++changelog=v6.17.7: DETAIL TARIKAN GOOGLE SPREADSHEET per Rencana Awal, Rencana Akhir, dan Realisasi; urutan topologi, komponen sagging dan tambahan konstruksi terpisah, CEIL hanya pada total final, serta status Realisasi pada total terhadap Rencana Akhir. Lihat AUDIT_v6.17.7.md.
++    v6.17.1: PERBAIKAN "Google menolak permintaan (HTTP 400)" pada Sync Google Spreadsheet. AKARNYA UKURAN PERMINTAAN, BUKAN IZIN DAN BUKAN DATA YANG RUSAK. Google menolak satu body batchUpdate di atas 10 MB dengan HTTP 400, dan dua jalur menembusnya pada project besar. (1) PENULISAN NILAI. Seluruh workbook dikirim dalam SATU updateCells, sedangkan updateCells membungkus tiap sel menjadi {"userEnteredValue": {...}} -- sekitar 50 byte per sel. Sheet Titik Koordinat 12.000 baris x 18 kolom sudah 10,7 MB; 24.000 baris menjadi 21 MB dan 66.000 baris menjadi 59 MB. Sejak v6.17.0 aset eksisting dilaporkan pada ketiga tahap, sehingga jumlah barisnya bertambah dan project yang dahulu pas-pasan kini melewatinya. Penulisan nilai kini DIPECAH menurut ukuran: potongan pertama tiap sheet tetap memakai rentang tak terbatas sehingga sheet dibersihkan lebih dahulu, potongan berikutnya dibatasi baris dan hanya mengisi ekornya. Tidak ada baris yang hilang, tidak ada yang ganda, dan data yang menyusut tetap tidak meninggalkan ekor lama. (2) PENULISAN FORMAT. Sheet dengan kolom status (Kabel, Tiang, KONSTRUKSI TIANG) menghasilkan TIGA request format per baris data -- 60.000 request berukuran 16 MB untuk 20.000 baris. Baris berurutan yang kolom dan nilainya sama kini digabung menjadi satu rentang; sel yang diformat sama sekali tidak berubah, yang digabung hanya request-nya. (3) LAPISAN PENGIRIMAN. Struktur, format, dan nilai sama-sama dikirim lewat request_batches() yang memecah daftar request menjadi body-body di bawah anggaran 6 MB sambil MEMPERTAHANKAN URUTAN -- urutan itu bagian dari kebenarannya. Workbook kecil tetap menghasilkan TEPAT SATU body, jadi perilakunya tidak berubah. (4) PESAN HTTP 400 kini menyebut sebabnya (paket data terlalu besar atau rentang sel tidak valid) beserta pesan asli Google, dan menegaskan data SIGAMON tidak berubah. Tidak ada perubahan pada isi sheet, struktur kolom, layer, GeoPackage, BOQ, atau geometri. Lihat AUDIT_v6.17.1.md.
+     v6.17.0: TAHAP DATA DAN STATUS TIANG DIPISAH. (1) Kolom "Tahap Data" pada sheet Titik Koordinat kini HANYA berisi Rencana Awal, Rencana Akhir, atau Realisasi; "Eksisting" tidak pernah lagi muncul sebagai tahap. (2) Kolom BARU "Status Tiang" (Eksisting/Rencana/Realisasi) menggantikan kolom "Catatan" yang dulu hanya mengulang Tahap Data; jumlah kolom tidak berubah. (3) Satu aset eksisting kini dilaporkan pada SETIAP tahap yang lokasinya memang sudah digambar, dengan koordinat yang di-resolve per tahap: record tahap tersebut bila ada, record dasar bila tidak. Posisi Rencana Awal tidak pernah tertimpa oleh perubahan Rencana Akhir/Realisasi. (4) Identitas objek dijaga uid_objek -> feature_uuid -> ID+Lokasi (stage_model.object_identity), sehingga tiga baris tahap tetap terbaca sebagai satu tiang. (5) Export Titik Koordinat Excel ikut memisahkan "Tahap Data" dan "Status Tiang". (6) INTEGRASI PREVIEW MAPS KE SPREADSHEET DIBATALKAN. Sheet "Preview Maps", generate preview khusus spreadsheet, unggah PNG ke Google Drive, hyperlink "Buka Preview", status preview, timestamp preview, dan pengaturan izin "Anyone with the link" dihapus seluruhnya; modul preview_maps.py, kelas DriveClient, kelas Formula/hyperlink pada schema, serta helper render khusus spreadsheet pada plugin.py ikut dibuang. Scope OAuth kembali hanya spreadsheets + userinfo.email, dan sinkronisasi tidak lagi menyentuh Google Drive sama sekali -- tidak ada request Drive yang dapat menimbulkan HTTP 400. (7) Workbook kembali berisi LIMA sheet: Kabel, Tiang, KONSTRUKSI TIANG, Pindah Lokasi, Titik Koordinat. Tab "Preview Maps" tidak pernah dibuat ulang, dan tab sisa dari implementasi sebelumnya dihapus lewat cleanup tab yang memang sudah ada -- hanya sesudah kelima sheet final dipastikan tersedia, sehingga sheet lain dan data pengguna tidak dapat ikut terhapus. (8) Preview Maps DI DALAM QGIS tidak disentuh: tombol F11, MapPreviewDialog, build_preview_layer_set, render_map_preview_image, export_preview_image, dan preview_style tetap seperti semula, termasuk perhitungan extent yang dikembalikan ke dalam dialog. (9) Cakupan Sync tetap SELURUH Lokasi Proyek pada Judul Proyek aktif; filter F11 tetap alat tampilan saja. Tidak ada perubahan pada layer, GeoPackage, BOQ, atau geometri. Lihat AUDIT_v6.17.0.md.
+     v6.16.9: TM-4X pada tiang eksisting dihitung per tahap hanya bila endpoint jaringan tahap tersebut benar-benar terhubung ke UUID tiang (ID sebagai fallback bila UUID endpoint kosong). Pergeseran jalur dengan UUID segmen tetap tidak lagi meninggalkan hitungan lama. Deduplikasi satu kali per lokasi+tahap+tiang; BOQ, Kontrol Tiang, dan Google Sheet memakai agregasi yang sama. Export DXF Potongan kini membawa label koordinat berdasarkan membership tiangnya, sehingga teks offset tidak hilang; format Full, layer, style, skala, dan presisi 7 desimal tetap sama. Lihat AUDIT_v6.16.9.md.
+     v6.16.8: Final kebutuhan kabel memakai satu helper: SUTM = CEIL(KMS x 3 + sagging 2,5% + tambahan konstruksi per tahap), SUTR tetap 3% dan CEIL. Mapping tambahan memakai nilai final 3 fasa, TM-12/TM-13 9 m, tipe lain sesuai ketetapan; TM-8X benar dan TM8A tidak lagi menjadi aliasnya. Tidak ada sheet, tabel, menu, atau input baru. Lihat AUDIT_v6.16.8.md.
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/plugin.py work/pln_gambar_jaringan_sederhana_qgis4/plugin.py
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/plugin.py	2026-09-10 10:36:42.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/plugin.py	2026-09-10 15:23:33.227242367 +0900
+@@ -413,7 +413,7 @@
+             return None
+ 
+ # Versi plugin untuk ditampilkan kecil pada header panel (informasi saja).
+-PLN_TOOLS_VERSION = "v6.17.1"
++PLN_TOOLS_VERSION = "v6.17.7"
+ DXF_LAST_EXPORT_FOLDER_KEY = "PLNTools/dxf_last_export_folder"
+ PREVIEW_LAST_EXPORT_FOLDER_KEY = "PLNTools/preview_last_export_folder"
+ 
+@@ -83575,7 +83575,7 @@
+                 values.get("status_underbuild"),
+                 values.get("konstruksi_bawah"),
+             )
+-            spans.append({
++            spans.append({
+                 "feature_uuid": pln_stage.clean(values.get("feature_uuid")),
+                 "uid_objek": pln_stage.clean(values.get("uid_objek")),
+                 "dari_tiang": pln_stage.clean(values.get("dari_tiang")),
+@@ -83599,17 +83599,25 @@
+                 "has_tm": bool(has_tm),
+                 "has_tr": bool(has_tr),
+                 "underbuild": bool(is_under),
+-                "keterangan": pln_stage.clean(values.get("catatan_jaringan")),
+-                "layer_name": values.get("layer_name"),
+-                "fid": values.get("fid"),
+-            })
+-        # Urutan mengikuti alur gambar: gardu/tiang awal lebih dahulu, lalu
+-        # menaik secara natural (T-2 sebelum T-10).
+-        spans.sort(key=lambda row: (
+-            _pln_natural_key(row.get("dari_tiang")),
+-            _pln_natural_key(row.get("ke_tiang")),
+-        ))
+-        return spans
++                "keterangan": pln_stage.clean(values.get("catatan_jaringan")),
++                # Konstruksi yang memang melekat pada feature tarikan dibawa
++                # sampai ke Spreadsheet. Ini menjaga tambahan konstruksi
++                # tetap terlihat pada gawang terkait, bukan hanya sebagai
++                # angka rekap tahap yang tidak dapat diaudit petugas.
++                "konstruksi_utama": pln_stage.clean(
++                    values.get("konstruksi_utama")
++                ),
++                "konstruksi_bawah": pln_stage.clean(
++                    values.get("konstruksi_bawah")
++                ),
++                "id_jalur": pln_stage.clean(values.get("id_jalur")),
++                "id_segmen": pln_stage.clean(values.get("id_segmen")),
++                "layer_name": values.get("layer_name"),
++                "fid": values.get("fid"),
++            })
++        # Urutan harus mengikuti konektivitas, bukan sekadar ID. Helper
++        # QGIS-free melakukan traversal deterministik per komponen/cabang.
++        return pln_boq.order_span_topology(spans)
+ 
+     #: Prefiks kunci penyimpanan sagging pada tabel ``project_settings``.
+     #: Memakai mekanisme setting yang SUDAH ADA -- tidak ada tabel baru dan
+@@ -84496,15 +84504,26 @@
+             stage_sagging = self.load_cable_sagging(
+                 location_id, location_name, stage
+             )
+-            stage_rows = pln_boq.build_span_rows(
+-                stage_raw_spans, stage_sagging,
++            stage_rows = pln_boq.build_span_rows(
++                stage_raw_spans, stage_sagging,
+                 default=(
+                     pln_boq.SUTR_PLAN_ALLOWANCE_PERCENT
+                     if stage != pln_stage.STAGE_REALISASI
+                     else pln_boq.SAGGING_DEFAULT_PERCENT
+-                ),
+-            )
+-            stage_span_payloads[stage] = {
++                ),
++            )
++            for row in stage_rows:
++                codes = [
++                    pln_stage.clean(row.get("konstruksi_utama")),
++                    pln_stage.clean(row.get("konstruksi_bawah")),
++                ]
++                codes = [code for code in codes if code]
++                row["konstruksi_terkait"] = ", ".join(codes)
++                row["tambahan_konstruksi_sutm"] = (
++                    pln_boq.construction_extra_meters(codes)
++                    if row.get("has_tm") else 0.0
++                )
++            stage_span_payloads[stage] = {
+                 "stage": stage,
+                 "stage_label": pln_stage.stage_short_label(stage),
+                 "spans": stage_rows,
+@@ -85528,7 +85547,7 @@
+         counts["Pindah Lokasi"] = len(self.list_material_redistributions())
+         return counts
+ 
+-    def material_control_snapshot(self):
++    def material_control_snapshot(self):
+         """Data sheet Kabel dan Tiang, PER LOKASI PROYEK.
+ 
+         Setiap baris membawa ``id_lokasi`` dan nama lokasinya sendiri (§2/§6/
+@@ -85544,8 +85563,9 @@
+         workbook tidak boleh kehilangan lokasi yang gagal dibaca.
+         """
+         locations = self.material_control_locations()
+-        cable = {"sutm": [], "sutr": []}
+-        poles = {"tm": [], "tr": [], "konstruksi": []}
++        cable = {"sutm": [], "sutr": []}
++        poles = {"tm": [], "tr": [], "konstruksi": []}
++        stage_spans = {stage: [] for stage in pln_stage.BOQ_STAGES}
+         for location_id, location_name in locations:
+             try:
+                 payload = self.boq_control_payload(location_id, location_name)
+@@ -85565,10 +85585,17 @@
+                 cable.setdefault(key, []).extend(
+                     dict(entry, **owner) for entry in entries
+                 )
+-            for key, entries in self._control_pole_rows(rows).items():
++            for key, entries in self._control_pole_rows(rows).items():
+                 poles.setdefault(key, []).extend(
+-                    dict(entry, **owner) for entry in entries
+-                )
++                    dict(entry, **owner) for entry in entries
++                )
++            for stage, stage_payload in dict(
++                (payload or {}).get("stage_spans") or {}
++            ).items():
++                for span in list((stage_payload or {}).get("spans") or []):
++                    stage_spans.setdefault(stage, []).append(
++                        dict(span, **owner)
++                    )
+         return {
+             # ``kontrol_context`` tetap ada sebagai CADANGAN untuk baris yang
+             # lokasinya tidak dikenali master; ia bukan lagi sumber metadata
+@@ -85580,8 +85607,9 @@
+             # metadata lokasi itu pada baris milik lokasi lain.
+             "kontrol_context": self.material_control_context(),
+             "kontrol_kabel": cable,
+-            "kontrol_tiang": poles,
+-        }
++            "kontrol_tiang": poles,
++            "kontrol_tarikan": stage_spans,
++        }
+ 
+     def location_metadata_index(self):
+         """Metadata seluruh Lokasi Proyek, dikunci ID **dan** nama.
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/spreadsheet_schema.py work/pln_gambar_jaringan_sederhana_qgis4/spreadsheet_schema.py
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/spreadsheet_schema.py	2026-09-10 11:20:26.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/spreadsheet_schema.py	2026-09-10 15:12:00.849721213 +0900
+@@ -22,6 +22,7 @@
+ 
+ from __future__ import annotations
+ 
++import math
+ import re
+ from datetime import datetime
+ 
+@@ -54,6 +55,9 @@
+ SHEET_PINDAH = "Pindah Lokasi"
+ SHEET_TITIK = "Titik Koordinat"
+ SHEET_RINGKASAN = "RINGKASAN KEBUTUHAN"
++SHEET_DETAIL_AWAL = "Rencana Awal"
++SHEET_DETAIL_AKHIR = "Rencana Akhir"
++SHEET_DETAIL_REALISASI = "Realisasi"
+ 
+ #: Urutan tetap kelimanya. Dipakai pembangun payload, pengatur urutan tab,
+ #: dan penjaga tes.
+@@ -66,7 +70,8 @@
+ #: pernah lagi bercampur dalam satu tabel.
+ CONTROL_SHEETS = (
+     SHEET_KABEL, SHEET_POLES, SHEET_KONSTRUKSI, SHEET_PINDAH,
+-    SHEET_RINGKASAN, SHEET_TITIK,
++    SHEET_RINGKASAN, SHEET_DETAIL_AWAL, SHEET_DETAIL_AKHIR,
++    SHEET_DETAIL_REALISASI, SHEET_TITIK,
+ )
+ 
+ #: SATU-SATUNYA daftar sheet yang boleh ada di workbook (§G). Semua sheet di
+@@ -2609,6 +2614,140 @@
+     return True
+ 
+ 
++# ---------------------------------------------------------------------------
++# DETAIL TARIKAN PER TAHAP
++# ---------------------------------------------------------------------------
++DETAIL_HEADERS = [
++    "No", "Proyek", "Lokasi Proyek", "Desa", "Tahap", "Paket", "UP3",
++    "ULP", "Vendor MDU", "Vendor Jasa", "Jenis Baris", "Urutan Jaringan",
++    "Jalur / Cabang", "Tiang Awal", "Tiang Akhir", "ID Gawang",
++    "Klasifikasi", "Jenis Kabel", "KMS (m)", "Sagging (%)",
++    "Tambahan Sagging (m)", "Konstruksi Terkait",
++    "Tambahan Konstruksi (m)", "Kebutuhan Kabel (m)",
++    "Target Rencana Akhir (m)", "Deviasi (m)", "Status", "Tanggal Update",
++]
++DETAIL_WIDTHS = [
++    45, 180, 180, 130, 100, 110, 140, 140, 145, 145, 100, 115, 120,
++    115, 115, 210, 100, 190, 100, 100, 145, 190, 155, 155, 165, 120,
++    105, 140,
++]
++DETAIL_NUMBER_COLUMNS = {
++    column: "#,##0.0" for column in (19, 20, 21, 23, 24, 25, 26)
++}
++_DETAIL_STAGE_KEYS = {
++    SHEET_DETAIL_AWAL: "RENCANA_AWAL",
++    SHEET_DETAIL_AKHIR: "RENCANA_AKHIR",
++    SHEET_DETAIL_REALISASI: "REALISASI",
++}
++
++
++def _detail_parts(snapshot, stage_key):
++    """Pecah underbuild menjadi baris SUTM/SUTR tanpa menghitung geometri."""
++    rows = []
++    for source in dict((snapshot or {}).get("kontrol_tarikan") or {}).get(
++        stage_key, ()
++    ):
++        source = dict(source or {})
++        classes = []
++        if source.get("has_tm"):
++            classes.append(("SUTM", 3.0, source.get("sagging_sutm"),
++                            source.get("tipe_kabel")))
++        if source.get("has_tr"):
++            classes.append(("SUTR", 1.0, source.get("sagging_sutr"),
++                            source.get("tipe_kabel_bawah")
++                            if source.get("underbuild") else source.get("tipe_kabel")))
++        if not classes:
++            classes.append(("SUTR", 1.0, source.get("sagging_sutr"),
++                            source.get("tipe_kabel")))
++        for classification, multiplier, percent, cable_type in classes:
++            kms = _number(source.get("panjang"))
++            percent = _number(percent)
++            sagging = kms * multiplier * percent / 100.0
++            construction_extra = (
++                _number(source.get("tambahan_konstruksi_sutm"))
++                if classification == "SUTM" else 0.0
++            )
++            row = dict(source)
++            row.update({
++                "classification": classification,
++                "cable_type": clean(cable_type) or UNSPECIFIED_CABLE,
++                "kms": kms, "percent": percent, "sagging_m": sagging,
++                "construction_extra": construction_extra,
++                "need": kms * multiplier + sagging + construction_extra,
++            })
++            rows.append(row)
++    return rows
++
++
++def _detail_totals(snapshot, stage_key):
++    totals = {}
++    for row in _detail_parts(snapshot, stage_key):
++        key = (clean(row.get("id_lokasi")), row["classification"])
++        bucket = totals.setdefault(key, {
++            "kms": 0.0, "sagging": 0.0, "construction": 0.0, "need": 0.0,
++        })
++        bucket["kms"] += row["kms"]
++        bucket["sagging"] += row["sagging_m"]
++        bucket["construction"] += row["construction_extra"]
++        bucket["need"] += row["need"]
++    return totals
++
++
++def build_detail_stage_layout(snapshot, title):
++    """Satu sheet tahap: detail gawang berurutan lalu ringkasan SUTM/SUTR."""
++    stage_key = _DETAIL_STAGE_KEYS[title]
++    index = _metadata_index(snapshot)
++    fallback = dict((snapshot or {}).get("kontrol_context") or {})
++    updated = display_time((snapshot or {}).get("generated"))
++    table = FlatTable(title, DETAIL_HEADERS, DETAIL_WIDTHS).numbers(
++        DETAIL_NUMBER_COLUMNS
++    ).status_column(27)
++    current = _detail_totals(snapshot, stage_key)
++    target = _detail_totals(snapshot, "RENCANA_AKHIR")
++    grouped = {}
++    for row in _detail_parts(snapshot, stage_key):
++        grouped.setdefault(clean(row.get("id_lokasi")), []).append(row)
++    number = 0
++    for location_id, rows in grouped.items():
++        metadata = resolve_location_metadata(
++            index, location_id,
++            clean(rows[0].get("lokasi")) if rows else "", fallback,
++        )
++        metadata_cells = control_context_cells(metadata)
++        for order, row in enumerate(rows, 1):
++            number += 1
++            # Status per gawang sengaja kosong. Kontrol Realisasi dilakukan
++            # hanya pada TOTAL terhadap Rencana Akhir.
++            table.add([number] + metadata_cells + [
++                "Detail", order, clean(row.get("id_jalur")),
++                clean(row.get("dari_tiang")), clean(row.get("ke_tiang")),
++                clean(row.get("key")), row["classification"],
++                row["cable_type"], row["kms"], row["percent"],
++                row["sagging_m"], clean(row.get("konstruksi_terkait")),
++                row["construction_extra"], row["need"], "", "", "", updated,
++            ])
++        for classification in ("SUTM", "SUTR"):
++            values = current.get((location_id, classification))
++            if not values:
++                continue
++            final_need = int(math.ceil(values["need"]))
++            target_need = int(math.ceil(
++                target.get((location_id, classification), {}).get("need", 0.0)
++            ))
++            available = stage_key == "REALISASI"
++            deviation = final_need - target_need if available else ""
++            status = control_status(final_need, target_need, True) if available else ""
++            number += 1
++            table.add([number] + metadata_cells + [
++                "Ringkasan", "", "", "", "", "",
++                classification, "TOTAL", values["kms"], "",
++                values["sagging"], "TOTAL KONSTRUKSI",
++                values["construction"], final_need,
++                target_need if available else "", deviation, status, updated,
++            ])
++    return table.finish()
++
++
+ def _metadata_index(snapshot):
+     """Indeks metadata Lokasi Proyek, dikunci ``id_lokasi`` DAN nama.
+ 
+@@ -2712,7 +2851,14 @@
+     })
+ 
+     number = 0
+-    for row in snapshot.get("coordinates") or []:
++    stage_order = {label: index for index, label in enumerate(STAGE_ROW_LABELS)}
++    coordinate_rows = [dict(row or {}) for row in snapshot.get("coordinates") or []]
++    # Sort stabil hanya berdasarkan tahap: urutan topologi yang sudah
++    # disiapkan collector tidak boleh diacak lagi oleh nama lokasi/ID.
++    coordinate_rows.sort(key=lambda row: stage_order.get(
++        clean(row.get("data_mode")), len(stage_order)
++    ))
++    for row in coordinate_rows:
+         row = dict(row or {})
+         metadata = resolve_location_metadata(
+             index, row.get("id_lokasi"), row.get("location"), fallback
+@@ -2748,6 +2894,15 @@
+         (SHEET_KONSTRUKSI, build_konstruksi_tiang_layout(snapshot)),
+         (SHEET_PINDAH, build_pindah_layout(snapshot)),
+         (SHEET_RINGKASAN, build_ringkasan_layout(snapshot)),
++        (SHEET_DETAIL_AWAL, build_detail_stage_layout(
++            snapshot, SHEET_DETAIL_AWAL
++        )),
++        (SHEET_DETAIL_AKHIR, build_detail_stage_layout(
++            snapshot, SHEET_DETAIL_AKHIR
++        )),
++        (SHEET_DETAIL_REALISASI, build_detail_stage_layout(
++            snapshot, SHEET_DETAIL_REALISASI
++        )),
+         (SHEET_TITIK, build_titik_layout(snapshot)),
+     ]
+ 
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/tests/test_audit_implementation.py work/pln_gambar_jaringan_sederhana_qgis4/tests/test_audit_implementation.py
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/tests/test_audit_implementation.py	2026-09-09 14:39:06.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/tests/test_audit_implementation.py	2026-09-10 15:23:35.035162920 +0900
+@@ -210,7 +210,13 @@
+             'item':'Kabel SUTR','jumlah':10,'satuan':'m'}]
+         snapshot['source_counts']={'Kabel':9,'Tiang':9,'KONSTRUKSI TIANG':9,'Titik Koordinat':9,'Pindah Lokasi':1}
+         outputs=schema.validate_control_snapshot(snapshot,schema.build_control_payload(snapshot))
+-        self.assertEqual({'Kabel':18,'Tiang':3,'KONSTRUKSI TIANG':6,'Titik Koordinat':9,'Pindah Lokasi':1},outputs)
++        self.assertEqual(18, outputs['Kabel'])
++        self.assertEqual(3, outputs['Tiang'])
++        self.assertEqual(6, outputs['KONSTRUKSI TIANG'])
++        self.assertEqual(9, outputs['Titik Koordinat'])
++        self.assertEqual(1, outputs['Pindah Lokasi'])
++        for title in ('Rencana Awal', 'Rencana Akhir', 'Realisasi'):
++            self.assertGreater(outputs[title], 0)
+ 
+ 
+ class AtomicWriterTests(unittest.TestCase):
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/tests/test_control_sheets.py work/pln_gambar_jaringan_sederhana_qgis4/tests/test_control_sheets.py
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/tests/test_control_sheets.py	2026-09-10 11:22:27.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/tests/test_control_sheets.py	2026-09-10 15:14:47.586379704 +0900
+@@ -229,13 +229,14 @@
+     def test_exact_names_and_order(self):
+         self.assertEqual(
+             ("Kabel", "Tiang", "KONSTRUKSI TIANG", "Pindah Lokasi",
+-             "RINGKASAN KEBUTUHAN", "Titik Koordinat"),
++             "RINGKASAN KEBUTUHAN", "Rencana Awal", "Rencana Akhir",
++             "Realisasi", "Titik Koordinat"),
+             schema.CONTROL_SHEETS,
+         )
+ 
+     def test_the_whitelist_is_exactly_those_six(self):
+         self.assertEqual(schema.SHEET_WHITELIST, schema.CONTROL_SHEETS)
+-        self.assertEqual(6, len(schema.SHEET_WHITELIST))
++        self.assertEqual(9, len(schema.SHEET_WHITELIST))
+ 
+     def test_no_preview_maps_sheet_is_managed_any_more(self):
+         """Integrasi Preview Maps -> Spreadsheet dibatalkan (v6.17.0).
+@@ -1064,7 +1065,7 @@
+ 
+     def test_every_village_shares_the_one_sheet(self):
+         self.assertEqual(
+-            ["Kali Selatan", "Talawaan"], column(self.layout, "Desa")
++            ["Talawaan", "Kali Selatan"], column(self.layout, "Desa")
+         )
+ 
+     def test_the_metadata_follows_each_location(self):
+@@ -1209,7 +1210,7 @@
+             if body_:
+                 sheet = body_["filter"]["range"]["sheetId"]
+                 counts[sheet] = counts.get(sheet, 0) + 1
+-        self.assertEqual({100: 1, 101: 1, 102: 1, 103: 1, 104: 1, 105: 1}, counts)
++        self.assertEqual({100 + i: 1 for i in range(9)}, counts)
+ 
+     def test_no_range_is_empty(self):
+         for request in self._run():
+@@ -1308,7 +1309,7 @@
+             )
+         }
+         self.assertNotIn(100, targets)
+-        self.assertEqual({101, 102, 103, 104, 105}, targets)
++        self.assertEqual(set(range(101, 109)), targets)
+ 
+     def test_the_filter_range_is_zero_based_and_half_open(self):
+         payload = schema.build_control_payload(snapshot())
+@@ -1374,6 +1375,7 @@
+         metadata = self._metadata("Kabel", "Tiang")
+         self.assertEqual(
+             ["KONSTRUKSI TIANG", "Pindah Lokasi", "RINGKASAN KEBUTUHAN",
++             "Rencana Awal", "Rencana Akhir", "Realisasi",
+              "Titik Koordinat"],
+             self.builders["missing_final_sheets"](metadata),
+         )
+@@ -1385,7 +1387,8 @@
+     def test_every_sheet_outside_the_whitelist_is_deleted(self):
+         metadata = self._metadata(
+             "Kabel", "Tiang", "KONSTRUKSI TIANG", "Pindah Lokasi",
+-            "RINGKASAN KEBUTUHAN", "Titik Koordinat",
++            "RINGKASAN KEBUTUHAN", "Rencana Awal", "Rencana Akhir",
++            "Realisasi", "Titik Koordinat",
+             "Sheet1", "01_DASHBOARD", "Kontrol Material", "1. Kabel",
+             "Kabel (1)", "08_SYNC_LOG",
+         )
+@@ -1394,7 +1397,7 @@
+             for request in self.builders["sheet_cleanup_requests"](metadata)
+             if "deleteSheet" in request
+         }
+-        self.assertEqual({106, 107, 108, 109, 110, 111}, deleted)
++        self.assertEqual({109, 110, 111, 112, 113, 114}, deleted)
+ 
+     def test_a_leftover_preview_maps_tab_is_cleaned_up(self):
+         """Tab sisa implementasi lama ikut terhapus lewat mekanisme yang ada.
+@@ -1412,7 +1415,7 @@
+             for request in self.builders["sheet_cleanup_requests"](metadata)
+             if "deleteSheet" in request
+         }
+-        self.assertEqual({106}, deleted)
++        self.assertEqual({109}, deleted)
+ 
+     def test_the_final_sheets_are_never_deleted(self):
+         metadata = self._metadata(*(list(schema.SHEET_WHITELIST) + ["Sheet1"]))
+@@ -1421,7 +1424,7 @@
+             for request in self.builders["sheet_cleanup_requests"](metadata)
+             if "deleteSheet" in request
+         }
+-        self.assertEqual({106}, deleted)
++        self.assertEqual({109}, deleted)
+ 
+     def test_a_clean_workbook_needs_no_request_at_all(self):
+         metadata = self._metadata(*schema.SHEET_WHITELIST)
+@@ -1431,8 +1434,9 @@
+ 
+     def test_the_tabs_are_put_into_the_agreed_order(self):
+         metadata = self._metadata(
+-            "Titik Koordinat", "RINGKASAN KEBUTUHAN", "Pindah Lokasi",
+-            "KONSTRUKSI TIANG", "Tiang", "Kabel",
++            "Titik Koordinat", "Realisasi", "Rencana Akhir", "Rencana Awal",
++            "RINGKASAN KEBUTUHAN", "Pindah Lokasi", "KONSTRUKSI TIANG",
++            "Tiang", "Kabel",
+         )
+         ordered = [
+             (request["updateSheetProperties"]["properties"]["sheetId"],
+@@ -1441,7 +1445,8 @@
+         ]
+         # Konstruksi sudah di index 3 pada input dan ikut dipindah ke index 2.
+         self.assertEqual(
+-            [(105, 0), (104, 1), (103, 2), (102, 3), (101, 4), (100, 5)],
++            [(108, 0), (107, 1), (106, 2), (105, 3),
++             (103, 5), (102, 6), (101, 7), (100, 8)],
+             ordered,
+         )
+ 
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/tests/test_spreadsheet_binding.py work/pln_gambar_jaringan_sederhana_qgis4/tests/test_spreadsheet_binding.py
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/tests/test_spreadsheet_binding.py	2026-09-10 11:25:44.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/tests/test_spreadsheet_binding.py	2026-09-10 15:23:35.943123006 +0900
+@@ -320,7 +320,8 @@
+         """
+         self.assertEqual(
+             ("Kabel", "Tiang", "KONSTRUKSI TIANG", "Pindah Lokasi",
+-             "RINGKASAN KEBUTUHAN", "Titik Koordinat"),
++             "RINGKASAN KEBUTUHAN", "Rencana Awal", "Rencana Akhir",
++             "Realisasi", "Titik Koordinat"),
+             schema.CONTROL_SHEETS,
+         )
+         self.assertIn("schema.build_control_payload(self._snapshot)", self.sync)
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/tests/test_spreadsheet_span_details.py work/pln_gambar_jaringan_sederhana_qgis4/tests/test_spreadsheet_span_details.py
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/tests/test_spreadsheet_span_details.py	1970-01-01 09:00:00.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/tests/test_spreadsheet_span_details.py	2026-09-10 15:12:35.780183052 +0900
+@@ -0,0 +1,67 @@
++import math
++import unittest
++
++import _bootstrap  # noqa: F401
++import boq_control as boq
++import spreadsheet_schema as schema
++
++
++class SpanTopologyTests(unittest.TestCase):
++    def test_traversal_follows_connections_and_keeps_branches(self):
++        rows = [
++            {"feature_uuid": "c", "dari_tiang": "T-2", "ke_tiang": "T-4"},
++            {"feature_uuid": "a", "dari_tiang": "G-1", "ke_tiang": "T-1"},
++            {"feature_uuid": "b", "dari_tiang": "T-1", "ke_tiang": "T-2"},
++            {"feature_uuid": "d", "dari_tiang": "T-1", "ke_tiang": "T-3"},
++        ]
++        ordered = boq.order_span_topology(rows)
++        self.assertEqual(["a", "b", "c", "d"], [row["feature_uuid"] for row in ordered])
++
++
++class SpreadsheetSpanDetailTests(unittest.TestCase):
++    def snapshot(self):
++        base = {
++            "id_lokasi": "L1", "lokasi": "Lokasi A", "key": "span-1",
++            "dari_tiang": "G-1", "ke_tiang": "T-1", "panjang": 10.04,
++            "has_tm": True, "has_tr": False, "tipe_kabel": "AAAC",
++            "sagging_sutm": 2.5, "konstruksi_terkait": "TM-4X",
++            "tambahan_konstruksi_sutm": 3.0,
++        }
++        return {
++            "location_metadata": {"L1": {
++                "id_lokasi": "L1", "lokasi": "Lokasi A", "proyek": "APBN 2026"
++            }},
++            "kontrol_tarikan": {
++                "RENCANA_AWAL": [dict(base)],
++                "RENCANA_AKHIR": [dict(base)],
++                "REALISASI": [dict(base, panjang=9.9, sagging_sutm=4.0)],
++            },
++        }
++
++    def test_detail_keeps_one_decimal_and_ceil_only_summary(self):
++        layout = schema.build_detail_stage_layout(
++            self.snapshot(), schema.SHEET_DETAIL_AWAL
++        )
++        detail, summary = layout.values[1], layout.values[2]
++        self.assertAlmostEqual(10.04, detail[18])
++        raw = 10.04 * 3 + (10.04 * 3 * 0.025) + 3.0
++        self.assertAlmostEqual(raw, detail[23])
++        self.assertEqual(math.ceil(raw), summary[23])
++
++    def test_realisasi_status_is_only_on_summary(self):
++        layout = schema.build_detail_stage_layout(
++            self.snapshot(), schema.SHEET_DETAIL_REALISASI
++        )
++        detail, summary = layout.values[1], layout.values[2]
++        self.assertEqual("", detail[26])
++        self.assertIn(summary[26], ("Kurang", "Sesuai", "Lebih"))
++
++    def test_control_payload_contains_three_stage_sheets(self):
++        titles = [title for title, _layout in schema.build_control_payload(self.snapshot())]
++        self.assertEqual([
++            "Rencana Awal", "Rencana Akhir", "Realisasi"
++        ], titles[5:8])
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/tests/test_sync_has_no_drive_calls.py work/pln_gambar_jaringan_sederhana_qgis4/tests/test_sync_has_no_drive_calls.py
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/tests/test_sync_has_no_drive_calls.py	2026-09-10 11:25:45.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/tests/test_sync_has_no_drive_calls.py	2026-09-10 15:23:36.851083106 +0900
+@@ -87,7 +87,8 @@
+     def test_the_managed_sheets_are_the_six_data_sheets(self):
+         self.assertEqual(
+             ("Kabel", "Tiang", "KONSTRUKSI TIANG", "Pindah Lokasi",
+-             "RINGKASAN KEBUTUHAN", "Titik Koordinat"),
++             "RINGKASAN KEBUTUHAN", "Rencana Awal", "Rencana Akhir",
++             "Realisasi", "Titik Koordinat"),
+             schema.CONTROL_SHEETS,
+         )
+         titles = [title for title, _ in schema.build_control_payload({})]
