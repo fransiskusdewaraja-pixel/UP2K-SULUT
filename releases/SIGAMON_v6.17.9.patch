@@ -1,0 +1,1395 @@
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/AUDIT_v6.17.8.md work/pln_gambar_jaringan_sederhana_qgis4/AUDIT_v6.17.8.md
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/AUDIT_v6.17.8.md	1970-01-01 09:00:00.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/AUDIT_v6.17.8.md	2026-09-10 16:40:46.846179157 +0900
+@@ -0,0 +1,30 @@
++# Audit SIGAMON v6.17.8
++
++## Hasil implementasi
++
++- Daftar sheet terkelola kini tepat lima dan berurutan: `Kabel`, `Tiang`,
++  `KONSTRUKSI TIANG`, `Pindah Lokasi`, `Titik Koordinat`.
++- `RINGKASAN KEBUTUHAN`, `Rencana Awal`, `Rencana Akhir`, dan `Realisasi`
++  bukan lagi sheet terkelola. Cleanup whitelist menghapus tab lama itu setelah
++  kelima tab final berhasil tersedia.
++- Kolom `Desa` dihapus dari Kabel, Tiang, KONSTRUKSI TIANG, dan Titik
++  Koordinat. Kolom `Desa Asal` dan `Desa Tujuan` dihapus dari Pindah Lokasi.
++- Metadata output memakai `Lokasi Proyek`; metadata baris tetap mencakup Judul
++  Proyek, Lokasi Proyek, Tahap, Paket, UP3, ULP, Vendor MDU, dan Vendor Jasa.
++- Data Desa internal, pencarian/zoom/batas desa, dan fungsi GIS tidak diubah.
++- Tahap Data Rencana Awal, Rencana Akhir, dan Realisasi tetap dipertahankan di
++  sheet final yang memerlukannya.
++
++## Batas perubahan
++
++Engine BOQ, kebutuhan kabel, KMS tiga fasa, sagging, tambahan konstruksi,
++pembulatan CEIL total final, underbuild, konstruksi TM/TR dan TM-4X, koordinat,
++ID/status tiang, serta cakupan sinkronisasi seluruh lokasi dalam Judul Proyek
++aktif tidak diubah.
++
++## Migrasi workbook lama
++
++Sinkronisasi membangun/menulis lima sheet final lebih dahulu, kemudian
++memastikan semuanya tersedia sebelum menghapus seluruh tab di luar whitelist.
++Penulisan ulang tabel memakai header dan lebar baris baru sehingga kolom Desa
++lama tidak bergeser, tidak menjadi header ganda, dan tidak menyisakan data ekor.
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/AUDIT_v6.17.9.md work/pln_gambar_jaringan_sederhana_qgis4/AUDIT_v6.17.9.md
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/AUDIT_v6.17.9.md	1970-01-01 09:00:00.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/AUDIT_v6.17.9.md	2026-09-10 17:41:10.903572979 +0900
+@@ -0,0 +1,29 @@
++# Audit SIGAMON v6.17.9
++
++## Struktur final
++
++Workbook dikelola dalam urutan: Kabel, Tiang, Konstruksi Tiang, Pindah
++Lokasi, Titik Koordinat, Progress per Lokasi, Progress per UP3, dan Progress
++per Judul Proyek. Nama lama `KONSTRUKSI TIANG` berada di luar whitelist dan
++dibersihkan setelah tab pengganti berhasil tersedia.
++
++Empat tab detail/ringkasan lama tetap tidak dikelola. Seluruh output tidak
++memiliki kolom Desa, Desa Asal, atau Desa Tujuan; fungsi Desa internal QGIS
++tidak diubah.
++
++## Progress
++
++`progress_location_records()` menjadi satu-satunya sumber ketiga sheet.
++Identitas unik memakai Judul Proyek/id proyek dan Lokasi Proyek/id lokasi.
++Nilai Tahap Pekerjaan, Status, progress, catatan, vendor, dan timestamp dibaca
++dari master lokasi existing.
++
++Progress UP3 adalah rata-rata seluruh lokasi dalam kombinasi Judul Proyek +
++UP3. Progress Judul Proyek dihitung langsung dari seluruh lokasi, bukan
++rata-rata antar-UP3, sehingga berbobot otomatis menurut jumlah lokasi.
++
++## Batas perubahan
++
++BOQ, SUTM/SUTR, KMS, sagging, tambahan konstruksi, CEIL kebutuhan final,
++underbuild, TM/TR, TM-4X, koordinat, tahap gambar, dan cakupan sync seluruh
++lokasi pada Judul Proyek aktif tidak diubah.
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/CLAUDE.md work/pln_gambar_jaringan_sederhana_qgis4/CLAUDE.md
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/CLAUDE.md	2026-09-09 15:18:13.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/CLAUDE.md	2026-09-10 17:41:10.095558111 +0900
+@@ -1,4 +1,4 @@
+-# SIGAMON v6.17.1
++# SIGAMON v6.17.9
+ 
+ Workspace pengembangan plugin QGIS SIGAMON. Judul Proyek adalah batas data
+ tertinggi: dua Judul Proyek tetap dua dataset walaupun desa, nama Lokasi
+@@ -10,11 +10,16 @@
+ adalah STATUS objek, bukan tahap; ia tidak pernah menjadi nilai kolom "Tahap
+ Data" pada keluaran mana pun.
+ 
+-Google Spreadsheet berisi LIMA sheet data (Kabel, Tiang, KONSTRUKSI TIANG,
+-Pindah Lokasi, Titik Koordinat) dan tidak menyentuh Google Drive. Preview
++Google Spreadsheet berisi DELAPAN sheet data (Kabel, Tiang, Konstruksi Tiang,
++Pindah Lokasi, Titik Koordinat, Progress per Lokasi, Progress per UP3, dan
++Progress per Judul Proyek) dan tidak menyentuh Google Drive. Preview
+ Maps adalah fitur QGIS saja — jangan mengintegrasikannya kembali ke
+ Spreadsheet.
+ 
++Output Spreadsheet tidak memiliki kolom Desa, Desa Asal, atau Desa Tujuan.
++Lokasi Proyek adalah referensi lokasi output; data Desa internal QGIS tetap
++dipertahankan untuk fungsi GIS.
++
+ Setiap body `batchUpdate` WAJIB lewat `schema.request_batches()`: Google
+ menolak body di atas 10 MB dengan HTTP 400, dan sheet Titik Koordinat pada
+ project besar jauh melewatinya bila dikirim sekaligus.
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/README.txt work/pln_gambar_jaringan_sederhana_qgis4/README.txt
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/README.txt	2026-09-09 15:18:29.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/README.txt	2026-09-10 17:41:09.263542808 +0900
+@@ -1,4 +1,8 @@
+-SIGAMON v6.17.1
++SIGAMON v6.17.9
++Lihat AUDIT_v6.17.9.md untuk tiga sheet monitoring progress dan penamaan
++`Konstruksi Tiang`.
++Lihat AUDIT_v6.17.8.md untuk struktur final lima sheet dan penghapusan kolom
++Desa dari output Google Spreadsheet.
+ Lihat AUDIT_v6.17.1.md untuk perbaikan HTTP 400 pada Sync Google Spreadsheet.
+ Lihat AUDIT_v6.17.0.md untuk pemisahan Tahap Data vs Status Tiang pada sheet
+ Titik Koordinat.
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/TEST_MATRIX_v6.17.8.md work/pln_gambar_jaringan_sederhana_qgis4/TEST_MATRIX_v6.17.8.md
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/TEST_MATRIX_v6.17.8.md	1970-01-01 09:00:00.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/TEST_MATRIX_v6.17.8.md	2026-09-10 16:40:47.630193548 +0900
+@@ -0,0 +1,15 @@
++# Test Matrix SIGAMON v6.17.8
++
++| Area | Pemeriksaan |
++|---|---|
++| Struktur sheet | Tepat lima nama final, urutan tetap, payload kosong tetap lengkap |
++| Migrasi | Empat tab obsolete dan tab asing dihapus hanya setelah lima tab final tersedia |
++| Header | Tidak ada Desa, Desa Asal, atau Desa Tujuan pada seluruh sheet final |
++| Identitas lokasi | Lokasi Proyek dan metadata proyek tetap benar per baris dan per lokasi |
++| Multi-lokasi | Kabel, Tiang, dan Titik Koordinat memuat semua lokasi dalam cakupan proyek |
++| Tahap Data | Rencana Awal, Rencana Akhir, Realisasi tetap ada dan berurutan |
++| Kabel | SUTM, SUTR, KMS, sagging, tambahan konstruksi, dan CEIL final |
++| Tiang/konstruksi | TM, TR, underbuild, TM-4X, perubahan desain, status realisasi |
++| Metadata organisasi | UP3, ULP, Vendor MDU, Vendor Jasa tidak tertukar |
++| Sinkronisasi | Builder, format, filter, batching, cleanup, dan urutan tab |
++| Regression | Seluruh `tests/test_*.py` dijalankan sebelum paket rilis dibuat |
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/TEST_MATRIX_v6.17.9.md work/pln_gambar_jaringan_sederhana_qgis4/TEST_MATRIX_v6.17.9.md
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/TEST_MATRIX_v6.17.9.md	1970-01-01 09:00:00.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/TEST_MATRIX_v6.17.9.md	2026-09-10 17:41:11.715587912 +0900
+@@ -0,0 +1,14 @@
++# Test Matrix SIGAMON v6.17.9
++
++| Area | Verifikasi |
++|---|---|
++| Managed sheets | Delapan tab, urutan final, `Konstruksi Tiang` case-sensitive |
++| Migrasi | Nama uppercase lama dan empat tab obsolete dibersihkan setelah delapan tab tersedia |
++| Progress lokasi | Satu id lokasi satu row; metadata, status, progress, catatan benar |
++| Progress UP3 | Grup Judul Proyek + UP3; jumlah status dan rata-rata lokasi benar |
++| Progress proyek | Total UP3 unik non-kosong; rata-rata berbasis seluruh lokasi |
++| Weighted aggregation | 10 lokasi 100% + 90 lokasi 0% menghasilkan 10%, bukan 50% |
++| Multi-proyek | Nama lokasi/UP3 sama pada dua Judul Proyek tidak tercampur |
++| Desa | Tidak muncul pada kedelapan output; data internal tetap tersedia |
++| Format | Header frozen, filter aktif, progress tampil satu desimal persen |
++| Regresi teknis | BOQ, kabel, tiang, konstruksi, koordinat, tahap, multi-lokasi |
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/metadata.txt work/pln_gambar_jaringan_sederhana_qgis4/metadata.txt
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/metadata.txt	2026-09-10 11:23:52.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/metadata.txt	2026-09-10 17:41:35.766313875 +0900
+@@ -1,10 +1,12 @@
+ [general]
+-name=SIGAMON v6.17.6 Gambar, Analisis, dan Monitoring Jaringan
++name=SIGAMON v6.17.9 Gambar, Analisis, dan Monitoring Jaringan
+ qgisMinimumVersion=3.0
+ author=SIGAMON — UP2K Sulawesi Utara
+ email=
+-version=6.17.6
+-changelog=v6.17.1: PERBAIKAN "Google menolak permintaan (HTTP 400)" pada Sync Google Spreadsheet. AKARNYA UKURAN PERMINTAAN, BUKAN IZIN DAN BUKAN DATA YANG RUSAK. Google menolak satu body batchUpdate di atas 10 MB dengan HTTP 400, dan dua jalur menembusnya pada project besar. (1) PENULISAN NILAI. Seluruh workbook dikirim dalam SATU updateCells, sedangkan updateCells membungkus tiap sel menjadi {"userEnteredValue": {...}} -- sekitar 50 byte per sel. Sheet Titik Koordinat 12.000 baris x 18 kolom sudah 10,7 MB; 24.000 baris menjadi 21 MB dan 66.000 baris menjadi 59 MB. Sejak v6.17.0 aset eksisting dilaporkan pada ketiga tahap, sehingga jumlah barisnya bertambah dan project yang dahulu pas-pasan kini melewatinya. Penulisan nilai kini DIPECAH menurut ukuran: potongan pertama tiap sheet tetap memakai rentang tak terbatas sehingga sheet dibersihkan lebih dahulu, potongan berikutnya dibatasi baris dan hanya mengisi ekornya. Tidak ada baris yang hilang, tidak ada yang ganda, dan data yang menyusut tetap tidak meninggalkan ekor lama. (2) PENULISAN FORMAT. Sheet dengan kolom status (Kabel, Tiang, KONSTRUKSI TIANG) menghasilkan TIGA request format per baris data -- 60.000 request berukuran 16 MB untuk 20.000 baris. Baris berurutan yang kolom dan nilainya sama kini digabung menjadi satu rentang; sel yang diformat sama sekali tidak berubah, yang digabung hanya request-nya. (3) LAPISAN PENGIRIMAN. Struktur, format, dan nilai sama-sama dikirim lewat request_batches() yang memecah daftar request menjadi body-body di bawah anggaran 6 MB sambil MEMPERTAHANKAN URUTAN -- urutan itu bagian dari kebenarannya. Workbook kecil tetap menghasilkan TEPAT SATU body, jadi perilakunya tidak berubah. (4) PESAN HTTP 400 kini menyebut sebabnya (paket data terlalu besar atau rentang sel tidak valid) beserta pesan asli Google, dan menegaskan data SIGAMON tidak berubah. Tidak ada perubahan pada isi sheet, struktur kolom, layer, GeoPackage, BOQ, atau geometri. Lihat AUDIT_v6.17.1.md.
++version=6.17.9
++changelog=v6.17.9: Menambahkan Progress per Lokasi, Progress per UP3, dan Progress per Judul Proyek dari satu sumber master lokasi. Agregasi UP3 memakai kombinasi Judul Proyek plus UP3; agregasi proyek dihitung langsung dari seluruh lokasi agar berbobot benar. Nama sheet KONSTRUKSI TIANG diubah menjadi Konstruksi Tiang dan nama lama dibersihkan saat sync. Struktur final delapan sheet tetap tanpa kolom Desa; BOQ dan logika teknis tidak diubah. Lihat AUDIT_v6.17.9.md.
++    v6.17.8: Google Spreadsheet kembali tepat lima sheet final; tab RINGKASAN KEBUTUHAN, Rencana Awal, Rencana Akhir, dan Realisasi dibersihkan saat sync. Kolom Desa, Desa Asal, dan Desa Tujuan dihapus hanya dari output Spreadsheet; Lokasi Proyek menjadi identitas lokasi output. Data Desa internal QGIS, tiga Tahap, BOQ, kabel, sagging, tambahan konstruksi, CEIL, underbuild, TM/TR, TM-4X, koordinat, dan sync multi-lokasi tidak diubah. Lihat AUDIT_v6.17.8.md.
++    v6.17.1: PERBAIKAN "Google menolak permintaan (HTTP 400)" pada Sync Google Spreadsheet. AKARNYA UKURAN PERMINTAAN, BUKAN IZIN DAN BUKAN DATA YANG RUSAK. Google menolak satu body batchUpdate di atas 10 MB dengan HTTP 400, dan dua jalur menembusnya pada project besar. (1) PENULISAN NILAI. Seluruh workbook dikirim dalam SATU updateCells, sedangkan updateCells membungkus tiap sel menjadi {"userEnteredValue": {...}} -- sekitar 50 byte per sel. Sheet Titik Koordinat 12.000 baris x 18 kolom sudah 10,7 MB; 24.000 baris menjadi 21 MB dan 66.000 baris menjadi 59 MB. Sejak v6.17.0 aset eksisting dilaporkan pada ketiga tahap, sehingga jumlah barisnya bertambah dan project yang dahulu pas-pasan kini melewatinya. Penulisan nilai kini DIPECAH menurut ukuran: potongan pertama tiap sheet tetap memakai rentang tak terbatas sehingga sheet dibersihkan lebih dahulu, potongan berikutnya dibatasi baris dan hanya mengisi ekornya. Tidak ada baris yang hilang, tidak ada yang ganda, dan data yang menyusut tetap tidak meninggalkan ekor lama. (2) PENULISAN FORMAT. Sheet dengan kolom status (Kabel, Tiang, KONSTRUKSI TIANG) menghasilkan TIGA request format per baris data -- 60.000 request berukuran 16 MB untuk 20.000 baris. Baris berurutan yang kolom dan nilainya sama kini digabung menjadi satu rentang; sel yang diformat sama sekali tidak berubah, yang digabung hanya request-nya. (3) LAPISAN PENGIRIMAN. Struktur, format, dan nilai sama-sama dikirim lewat request_batches() yang memecah daftar request menjadi body-body di bawah anggaran 6 MB sambil MEMPERTAHANKAN URUTAN -- urutan itu bagian dari kebenarannya. Workbook kecil tetap menghasilkan TEPAT SATU body, jadi perilakunya tidak berubah. (4) PESAN HTTP 400 kini menyebut sebabnya (paket data terlalu besar atau rentang sel tidak valid) beserta pesan asli Google, dan menegaskan data SIGAMON tidak berubah. Tidak ada perubahan pada isi sheet, struktur kolom, layer, GeoPackage, BOQ, atau geometri. Lihat AUDIT_v6.17.1.md.
+     v6.17.0: TAHAP DATA DAN STATUS TIANG DIPISAH. (1) Kolom "Tahap Data" pada sheet Titik Koordinat kini HANYA berisi Rencana Awal, Rencana Akhir, atau Realisasi; "Eksisting" tidak pernah lagi muncul sebagai tahap. (2) Kolom BARU "Status Tiang" (Eksisting/Rencana/Realisasi) menggantikan kolom "Catatan" yang dulu hanya mengulang Tahap Data; jumlah kolom tidak berubah. (3) Satu aset eksisting kini dilaporkan pada SETIAP tahap yang lokasinya memang sudah digambar, dengan koordinat yang di-resolve per tahap: record tahap tersebut bila ada, record dasar bila tidak. Posisi Rencana Awal tidak pernah tertimpa oleh perubahan Rencana Akhir/Realisasi. (4) Identitas objek dijaga uid_objek -> feature_uuid -> ID+Lokasi (stage_model.object_identity), sehingga tiga baris tahap tetap terbaca sebagai satu tiang. (5) Export Titik Koordinat Excel ikut memisahkan "Tahap Data" dan "Status Tiang". (6) INTEGRASI PREVIEW MAPS KE SPREADSHEET DIBATALKAN. Sheet "Preview Maps", generate preview khusus spreadsheet, unggah PNG ke Google Drive, hyperlink "Buka Preview", status preview, timestamp preview, dan pengaturan izin "Anyone with the link" dihapus seluruhnya; modul preview_maps.py, kelas DriveClient, kelas Formula/hyperlink pada schema, serta helper render khusus spreadsheet pada plugin.py ikut dibuang. Scope OAuth kembali hanya spreadsheets + userinfo.email, dan sinkronisasi tidak lagi menyentuh Google Drive sama sekali -- tidak ada request Drive yang dapat menimbulkan HTTP 400. (7) Workbook kembali berisi LIMA sheet: Kabel, Tiang, KONSTRUKSI TIANG, Pindah Lokasi, Titik Koordinat. Tab "Preview Maps" tidak pernah dibuat ulang, dan tab sisa dari implementasi sebelumnya dihapus lewat cleanup tab yang memang sudah ada -- hanya sesudah kelima sheet final dipastikan tersedia, sehingga sheet lain dan data pengguna tidak dapat ikut terhapus. (8) Preview Maps DI DALAM QGIS tidak disentuh: tombol F11, MapPreviewDialog, build_preview_layer_set, render_map_preview_image, export_preview_image, dan preview_style tetap seperti semula, termasuk perhitungan extent yang dikembalikan ke dalam dialog. (9) Cakupan Sync tetap SELURUH Lokasi Proyek pada Judul Proyek aktif; filter F11 tetap alat tampilan saja. Tidak ada perubahan pada layer, GeoPackage, BOQ, atau geometri. Lihat AUDIT_v6.17.0.md.
+     v6.16.9: TM-4X pada tiang eksisting dihitung per tahap hanya bila endpoint jaringan tahap tersebut benar-benar terhubung ke UUID tiang (ID sebagai fallback bila UUID endpoint kosong). Pergeseran jalur dengan UUID segmen tetap tidak lagi meninggalkan hitungan lama. Deduplikasi satu kali per lokasi+tahap+tiang; BOQ, Kontrol Tiang, dan Google Sheet memakai agregasi yang sama. Export DXF Potongan kini membawa label koordinat berdasarkan membership tiangnya, sehingga teks offset tidak hilang; format Full, layer, style, skala, dan presisi 7 desimal tetap sama. Lihat AUDIT_v6.16.9.md.
+     v6.16.8: Final kebutuhan kabel memakai satu helper: SUTM = CEIL(KMS x 3 + sagging 2,5% + tambahan konstruksi per tahap), SUTR tetap 3% dan CEIL. Mapping tambahan memakai nilai final 3 fasa, TM-12/TM-13 9 m, tipe lain sesuai ketetapan; TM-8X benar dan TM8A tidak lagi menjadi aliasnya. Tidak ada sheet, tabel, menu, atau input baru. Lihat AUDIT_v6.16.8.md.
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/plugin.py work/pln_gambar_jaringan_sederhana_qgis4/plugin.py
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/plugin.py	2026-09-10 10:36:42.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/plugin.py	2026-09-10 17:41:08.423527358 +0900
+@@ -413,7 +413,7 @@
+             return None
+ 
+ # Versi plugin untuk ditampilkan kecil pada header panel (informasi saja).
+-PLN_TOOLS_VERSION = "v6.17.1"
++PLN_TOOLS_VERSION = "v6.17.9"
+ DXF_LAST_EXPORT_FOLDER_KEY = "PLNTools/dxf_last_export_folder"
+ PREVIEW_LAST_EXPORT_FOLDER_KEY = "PLNTools/preview_last_export_folder"
+ 
+@@ -43469,9 +43469,10 @@
+                 SHEET_WHITELIST, display_time = (), None
+         if display_time is not None:
+             moment = display_time(state.get("last_sync"))
+-        tab_names = ", ".join(SHEET_WHITELIST) or (
+-            "Kabel, Tiang, KONSTRUKSI TIANG, Pindah Lokasi, Titik Koordinat"
+-        )
++        tab_names = ", ".join(SHEET_WHITELIST) or (
++            "Kabel, Tiang, Konstruksi Tiang, Pindah Lokasi, Titik Koordinat, "
++            "Progress per Lokasi, Progress per UP3, Progress per Judul Proyek"
++        )
+         if override:
+             text, color = override, "#fde68a"
+         elif not connected:
+@@ -85497,7 +85498,7 @@
+ 
+     def sync_source_counts(self):
+         """Independent master scan before any remote write (all three stages)."""
+-        counts = {"Kabel": 0, "Tiang": 0, "KONSTRUKSI TIANG": 0,
++        counts = {"Kabel": 0, "Tiang": 0, "Konstruksi Tiang": 0,
+                   "Titik Koordinat": 0, "Pindah Lokasi": 0}
+         scope = self.active_project_scope()
+         for name in self.SYNC_DATA_LAYER_NAMES:
+@@ -85522,7 +85523,7 @@
+                     lower = [pln_stage.clean(self.get_feature_value_safe(feature, "konstruksi_bawah_{}".format(i), ""))
+                              for i in range(1, 5)]
+                     if (not existing and any(codes)) or "TM-4X" in codes or any(lower):
+-                        counts["KONSTRUKSI TIANG"] += 1
++                        counts["Konstruksi Tiang"] += 1
+                 elif not existing or pln_underbuild.is_underbuild(values):
+                     counts["Kabel"] += 1
+         counts["Pindah Lokasi"] = len(self.list_material_redistributions())
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/spreadsheet_schema.py work/pln_gambar_jaringan_sederhana_qgis4/spreadsheet_schema.py
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/spreadsheet_schema.py	2026-09-10 11:20:26.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/spreadsheet_schema.py	2026-09-10 17:34:57.690427572 +0900
+@@ -44,18 +44,20 @@
+ SHEET_MONITORING = "Dashboard Monitoring"
+ SHEET_MATERIAL = "Kontrol Material"
+ 
+-#: EMPAT SHEET FINAL. Namanya PERSIS seperti ini -- tanpa awalan angka, tanpa
++#: DELAPAN SHEET FINAL. Namanya PERSIS seperti ini -- tanpa awalan angka,
+ #: spasi tambahan -- dan urutannya tidak boleh berubah: setiap sinkronisasi
+ #: mencari sheet dengan nama ini lebih dahulu dan memakai ``sheetId``-nya
+ #: kembali, sehingga tidak pernah lahir "Kabel (1)" (§H).
+ SHEET_KABEL = "Kabel"
+ SHEET_POLES = "Tiang"
+-SHEET_KONSTRUKSI = "KONSTRUKSI TIANG"
++SHEET_KONSTRUKSI = "Konstruksi Tiang"
+ SHEET_PINDAH = "Pindah Lokasi"
+ SHEET_TITIK = "Titik Koordinat"
+-SHEET_RINGKASAN = "RINGKASAN KEBUTUHAN"
++SHEET_PROGRESS_LOCATION = "Progress per Lokasi"
++SHEET_PROGRESS_UP3 = "Progress per UP3"
++SHEET_PROGRESS_PROJECT = "Progress per Judul Proyek"
+ 
+-#: Urutan tetap kelimanya. Dipakai pembangun payload, pengatur urutan tab,
++#: Urutan tetap kedelapannya. Dipakai pembangun payload, pengatur urutan tab,
+ #: dan penjaga tes.
+ #:
+ #: ``KONSTRUKSI TIANG`` berdiri TEPAT SESUDAH ``Tiang`` karena keduanya
+@@ -65,12 +67,12 @@
+ #: JENIS TIANG (TM/TR) dan KODE KONSTRUKSI (TR-1, TM-4X, TM-TP2, ...) tidak
+ #: pernah lagi bercampur dalam satu tabel.
+ CONTROL_SHEETS = (
+-    SHEET_KABEL, SHEET_POLES, SHEET_KONSTRUKSI, SHEET_PINDAH,
+-    SHEET_RINGKASAN, SHEET_TITIK,
++    SHEET_KABEL, SHEET_POLES, SHEET_KONSTRUKSI, SHEET_PINDAH, SHEET_TITIK,
++    SHEET_PROGRESS_LOCATION, SHEET_PROGRESS_UP3, SHEET_PROGRESS_PROJECT,
+ )
+ 
+ #: SATU-SATUNYA daftar sheet yang boleh ada di workbook (§G). Semua sheet di
+-#: luar daftar ini dihapus otomatis SESUDAH kelimanya dipastikan tersedia --
++#: luar daftar ini dihapus otomatis SESUDAH kedelapannya dipastikan tersedia --
+ #: tidak pernah sebelumnya, supaya workbook tidak pernah kehilangan sheet
+ #: terakhirnya.
+ SHEET_WHITELIST = CONTROL_SHEETS
+@@ -1674,7 +1676,7 @@
+ #     * Basic Filter terpasang pada header + seluruh baris data;
+ #     * TIDAK ADA satu pun merged cell di area tabel;
+ #     * setiap baris membawa metadata proyeknya sendiri (Proyek, Lokasi
+-#       Proyek, Desa, Tahap, Paket, UP3, ULP, Vendor MDU, Vendor Jasa),
++#       Proyek, Tahap, Paket, UP3, ULP, Vendor MDU, Vendor Jasa),
+ #       sehingga pengguna cukup memfilter kolomnya di Google Sheets;
+ #     * "Tahap Data" (Rencana Awal / Rencana Akhir / Realisasi) adalah
+ #       KOLOM berisi baris, bukan section bertingkat;
+@@ -1690,7 +1692,7 @@
+ 
+ #: Kolom metadata proyek yang sama untuk Kabel, Tiang, dan Titik Koordinat.
+ PROJECT_COLUMNS = [
+-    "Proyek", "Lokasi Proyek", "Desa", "Tahap", "Paket", "UP3", "ULP",
++    "Proyek", "Lokasi Proyek", "Tahap", "Paket", "UP3", "ULP",
+     "Vendor MDU", "Vendor Jasa",
+ ]
+ 
+@@ -1723,7 +1725,7 @@
+ #: keterangannya, sehingga keduanya tidak dapat berbeda.
+ CONTROL_TOLERANCE = 0.05
+ 
+-#: Warna header keempat sheet: satu warna, tidak berpelangi (§A2).
++#: Warna header kelima sheet: satu warna, tidak berpelangi (§A2).
+ _FLAT_HEADER_FILL = (0.071, 0.243, 0.486)
+ _FLAT_HEADER_TEXT = (1.0, 1.0, 1.0)
+ 
+@@ -1733,12 +1735,18 @@
+     STATUS_KURANG_LABEL: (0.988, 0.855, 0.867),
+     STATUS_LEBIH_LABEL: (0.988, 0.902, 0.816),
+     STATUS_BELUM_LABEL: (0.925, 0.937, 0.945),
++    "Belum Dikerjakan": (0.925, 0.937, 0.945),
++    "Dalam Proses": (0.996, 0.953, 0.780),
++    "Selesai": (0.851, 0.937, 0.859),
+ }
+ _STATUS_TEXT = {
+     STATUS_SESUAI_LABEL: (0.043, 0.373, 0.271),
+     STATUS_KURANG_LABEL: (0.702, 0.110, 0.110),
+     STATUS_LEBIH_LABEL: (0.573, 0.251, 0.055),
+     STATUS_BELUM_LABEL: (0.420, 0.447, 0.502),
++    "Belum Dikerjakan": (0.420, 0.447, 0.502),
++    "Dalam Proses": (0.573, 0.251, 0.055),
++    "Selesai": (0.043, 0.373, 0.271),
+ }
+ 
+ _KMS_FORMAT = "#,##0.00"
+@@ -1824,7 +1832,7 @@
+ 
+ 
+ def control_context_cells(context):
+-    """Sembilan kolom metadata proyek untuk satu baris flat table.
++    """Delapan kolom metadata proyek untuk satu baris flat table.
+ 
+     Nilai kosong dibiarkan KOSONG, bukan diisi "-": sel kosong dapat disaring
+     Google Sheets sebagai "(Blanks)", sedangkan "-" menjadi nilai literal yang
+@@ -1834,7 +1842,6 @@
+     return [
+         clean(context.get("proyek")),
+         clean(context.get("lokasi")),
+-        clean(context.get("desa")),
+         clean(context.get("tahap")),
+         clean(context.get("paket")),
+         clean(context.get("up3")),
+@@ -1848,7 +1855,7 @@
+                               fallback=None):
+     """Metadata satu Lokasi Proyek untuk SATU baris -- resolver bersama.
+ 
+-    Dipakai keempat sheet tanpa kecuali. Sebelum ini, Titik Koordinat
++    Dipakai kelima sheet tanpa kecuali. Sebelum ini, Titik Koordinat
+     me-resolve metadata per baris sementara Kabel/Tiang mewarisi satu konteks
+     lokasi aktif; itulah sebabnya kolom Proyek..Vendor Jasa kosong pada dua
+     sheet dan terisi pada sheet yang lain. Satu resolver berarti satu hasil.
+@@ -2046,7 +2053,7 @@
+ )
+ CABLE_WIDTH = len(CABLE_HEADERS)
+ CABLE_COLUMN_WIDTHS = [
+-    45, 190, 180, 140, 110, 110, 150, 150, 160, 160,
++    45, 190, 180, 110, 110, 150, 150, 160, 160,
+     100, 200, 120, 90, 130, 130, 130, 110, 140,
+ ]
+ 
+@@ -2147,7 +2154,7 @@
+ )
+ POLE_WIDTH = len(POLE_HEADERS)
+ POLE_COLUMN_WIDTHS = [
+-    45, 190, 180, 140, 110, 110, 150, 150, 160, 160,
++    45, 190, 180, 110, 110, 150, 150, 160, 160,
+     120, 190, 120, 125, 140, 110, 145, 130, 140,
+ ]
+ 
+@@ -2310,24 +2317,23 @@
+ # SHEET 3 -- PINDAH LOKASI (§D)
+ # ---------------------------------------------------------------------------
+ #: Metadata proyek pada sheet Pindah Lokasi mengikuti LOKASI ASAL -- pihak
+-#: yang melepaskan materialnya. Desa Tujuan tetap diambil dari lokasi tujuan,
+-#: sehingga kedua sisi perpindahan terbaca pada baris yang sama (§5).
++#: yang melepaskan materialnya. Identitas kedua sisi memakai Lokasi Proyek.
+ MOVE_HEADERS = [
+     "No", "Tanggal", "Proyek", "Material", "Klasifikasi",
+     "Jenis / Spesifikasi", "Satuan", "Tahap", "Paket", "UP3", "ULP",
+     "Vendor MDU", "Vendor Jasa",
+-    "Dari Lokasi", "Desa Asal", "Ke Lokasi", "Desa Tujuan",
++    "Dari Lokasi", "Ke Lokasi",
+     "Qty Dipindahkan", "Sisa Lokasi Asal", "Kebutuhan Lokasi Tujuan",
+     "Status", "Catatan",
+ ]
+ MOVE_WIDTH = len(MOVE_HEADERS)
+ MOVE_COLUMN_WIDTHS = [
+     45, 100, 190, 120, 110, 190, 70, 110, 110, 150, 150, 160, 160,
+-    160, 140, 160, 140, 130, 130, 165, 110, 230,
++    160, 160, 130, 130, 165, 110, 230,
+ ]
+ MOVE_STATUS_COLUMN = MOVE_WIDTH - 1
+ #: Kolom 1-based tiga angka pada sheet Pindah Lokasi.
+-MOVE_QUANTITY_COLUMNS = (18, 19, 20)
++MOVE_QUANTITY_COLUMNS = (16, 17, 18)
+ 
+ 
+ def build_pindah_layout(snapshot):
+@@ -2374,9 +2380,7 @@
+             clean(entry.get("vendor_mdu")) or clean(source.get("vendor_mdu")),
+             clean(entry.get("vendor_jasa")) or clean(source.get("vendor_jasa")),
+             clean(entry.get("dari_lokasi")) or clean(source.get("lokasi")),
+-            clean(source.get("desa")),
+             clean(entry.get("ke_lokasi")) or clean(target.get("lokasi")),
+-            clean(target.get("desa")),
+             _number(entry.get("jumlah")),
+             _number(entry.get("sisa_asal")),
+             _number(entry.get("kebutuhan_tujuan")),
+@@ -2387,233 +2391,13 @@
+ 
+ 
+ # ---------------------------------------------------------------------------
+-# SHEET 5 -- RINGKASAN KEBUTUHAN
++# INDEKS METADATA LOKASI PROYEK
+ # ---------------------------------------------------------------------------
+-SUMMARY_HEADERS = [
+-    "No", "Proyek", "UP3", "Kategori", "Material", "Satuan",
+-    "Rencana Awal", "Rencana Akhir", "Deviasi Rencana",
+-    "Pindah Masuk", "Pindah Keluar", "Revisi Rencana", "Status Rencana",
+-    "Realisasi", "Deviasi Realisasi", "Status Realisasi", "Tanggal Update",
+-]
+-SUMMARY_WIDTH = len(SUMMARY_HEADERS)
+-SUMMARY_COLUMN_WIDTHS = [
+-    45, 190, 155, 100, 100, 75, 125, 125, 135, 120, 120, 125, 165,
+-    125, 140, 135, 140,
+-]
+-SUMMARY_NUMBER_COLUMNS = {
+-    column: _QTY_FORMAT for column in (7, 8, 9, 10, 11, 12, 14, 15)
+-}
+-SUMMARY_STATUS_COLUMN = 16
+-SUMMARY_PROJECT_TOTAL_UP3 = "Semua UP3"
+-SUMMARY_MATERIALS = (
+-    ("Kabel", "SUTM", "m"), ("Kabel", "SUTR", "m"),
+-    ("Tiang", "TM", "unit"), ("Tiang", "TR", "unit"),
+-)
+-
+-
+-def _summary_key(metadata, material):
+-    """Kunci agregasi yang tidak memakai desa sebagai identitas."""
+-    return (
+-        clean((metadata or {}).get("proyek")) or "(Proyek Kosong)",
+-        clean((metadata or {}).get("up3")) or "(UP3 Kosong)",
+-        clean(material).upper(),
+-    )
+-
+-
+-def _summary_bucket(buckets, key, category="", unit=""):
+-    return buckets.setdefault(key, {
+-        "category": clean(category), "unit": clean(unit),
+-        "awal": 0.0, "akhir": 0.0, "realisasi": 0.0,
+-        "ada_realisasi": False, "masuk": 0.0, "keluar": 0.0,
+-    })
+-
+-
+-def _summary_plan_status(delta, incoming, outgoing, revision):
+-    """Status desain memakai transaksi sebenarnya, bukan tebakan selisih."""
+-    has_in = abs(_number(incoming)) > 1e-9
+-    has_out = abs(_number(outgoing)) > 1e-9
+-    has_revision = abs(_number(revision)) > 1e-9
+-    if (has_in or has_out) and has_revision:
+-        return "Pindah + Revisi"
+-    if has_in and has_out:
+-        return "Pindah Masuk & Keluar"
+-    if has_in:
+-        return "Pindah Masuk"
+-    if has_out:
+-        return "Pindah Keluar"
+-    if abs(_number(delta)) <= 1e-9:
+-        return "Tetap"
+-    return "Bertambah" if delta > 0 else "Berkurang"
+-
+-
+-def _summary_location_buckets(snapshot):
+-    """Agregasi dari output engine existing: tidak menghitung BOQ/sagging."""
+-    snapshot = dict(snapshot or {})
+-    index = _metadata_index(snapshot)
+-    fallback = dict(snapshot.get("kontrol_context") or {})
+-    buckets = {}
+-
+-    cables = dict(snapshot.get("kontrol_kabel") or {})
+-    for source_key, material in CABLE_CLASSIFICATIONS:
+-        for entry in cables.get(source_key) or []:
+-            entry = dict(entry or {})
+-            metadata = resolve_location_metadata(
+-                index, entry.get("id_lokasi"), entry.get("lokasi"), fallback
+-            )
+-            bucket = _summary_bucket(
+-                buckets, _summary_key(metadata, material), "Kabel", "m"
+-            )
+-            bucket["awal"] += _number(entry.get("kebutuhan_awal"))
+-            bucket["akhir"] += _number(entry.get("kebutuhan_akhir"))
+-            bucket["realisasi"] += _number(entry.get("kebutuhan_realisasi"))
+-            bucket["ada_realisasi"] = (
+-                bucket["ada_realisasi"] or bool(entry.get("ada_realisasi"))
+-            )
+-
+-    poles = dict(snapshot.get("kontrol_tiang") or {})
+-    for source_key, material in POLE_CLASSIFICATIONS:
+-        for entry, metadata in _merge_stage_entries(
+-            poles.get(source_key), index, fallback, "spesifikasi"
+-        ):
+-            bucket = _summary_bucket(
+-                buckets, _summary_key(metadata, material), "Tiang", "unit"
+-            )
+-            bucket["awal"] += _number(entry.get("rencana_awal"))
+-            bucket["akhir"] += _number(entry.get("rencana_akhir"))
+-            bucket["realisasi"] += _number(entry.get("realisasi"))
+-            bucket["ada_realisasi"] = (
+-                bucket["ada_realisasi"] or bool(entry.get("ada_realisasi"))
+-            )
+-
+-    # Setiap id transaksi hanya boleh memengaruhi ringkasan sekali. Kedua sisi
+-    # tetap disimpan terpisah agar pindah internal UP3 bernetto nol namun
+-    # traceability Masuk/Keluar tidak hilang.
+-    seen = set()
+-    for movement in snapshot.get("kontrol_pindah") or []:
+-        movement = dict(movement or {})
+-        identity = clean(movement.get("id_transaksi"))
+-        if identity and identity in seen:
+-            continue
+-        if identity:
+-            seen.add(identity)
+-        material = clean(movement.get("klasifikasi")).upper()
+-        if material not in {row[1] for row in SUMMARY_MATERIALS}:
+-            continue
+-        category = "Kabel" if material.startswith("SU") else "Tiang"
+-        unit = "m" if category == "Kabel" else "unit"
+-        source = resolve_location_metadata(
+-            index, movement.get("id_lokasi_asal"), movement.get("dari_lokasi"),
+-            fallback,
+-        )
+-        target = resolve_location_metadata(
+-            index, movement.get("id_lokasi_tujuan"), movement.get("ke_lokasi"),
+-            fallback,
+-        )
+-        quantity = _number(movement.get("jumlah"))
+-        _summary_bucket(
+-            buckets, _summary_key(source, material), category, unit
+-        )["keluar"] += quantity
+-        _summary_bucket(
+-            buckets, _summary_key(target, material), category, unit
+-        )["masuk"] += quantity
+-    return buckets
+-
+-
+-def summary_records(snapshot):
+-    """Baris detail per UP3 ditambah total proyek berlabel Semua UP3."""
+-    detail = _summary_location_buckets(snapshot)
+-    totals = {}
+-    for (project, up3, material), values in detail.items():
+-        total = _summary_bucket(
+-            totals, (project, SUMMARY_PROJECT_TOTAL_UP3, material),
+-            values["category"], values["unit"],
+-        )
+-        for field in ("awal", "akhir", "realisasi", "masuk", "keluar"):
+-            total[field] += values[field]
+-        total["ada_realisasi"] = (
+-            total["ada_realisasi"] or values["ada_realisasi"]
+-        )
+-    combined = dict(detail)
+-    combined.update(totals)
+-    rows = []
+-    for key in sorted(combined, key=lambda item: (
+-        natural_key(item[0]), item[1] != SUMMARY_PROJECT_TOTAL_UP3,
+-        natural_key(item[1]), item[2],
+-    )):
+-        project, up3, material = key
+-        values = combined[key]
+-        delta = values["akhir"] - values["awal"]
+-        # perubahan yang dijelaskan transfer = masuk - keluar.
+-        revision = delta - values["masuk"] + values["keluar"]
+-        actual_delta = (
+-            values["realisasi"] - values["akhir"]
+-            if values["ada_realisasi"] else ""
+-        )
+-        rows.append({
+-            "project": project, "up3": up3,
+-            "category": values["category"], "material": material,
+-            "unit": values["unit"], "awal": values["awal"],
+-            "akhir": values["akhir"], "delta": delta,
+-            "masuk": values["masuk"], "keluar": values["keluar"],
+-            "revision": revision,
+-            "plan_status": _summary_plan_status(
+-                delta, values["masuk"], values["keluar"], revision
+-            ),
+-            "realisasi": values["realisasi"] if values["ada_realisasi"] else "",
+-            "actual_delta": actual_delta,
+-            "actual_status": realisasi_status_label(
+-                values["realisasi"], values["akhir"], values["ada_realisasi"]
+-            ),
+-        })
+-    return rows
+-
+-
+-def build_ringkasan_layout(snapshot):
+-    """Rekap numerik yang dapat difilter berdasarkan Proyek dan UP3."""
+-    table = FlatTable(
+-        SHEET_RINGKASAN, SUMMARY_HEADERS, SUMMARY_COLUMN_WIDTHS
+-    ).numbers(SUMMARY_NUMBER_COLUMNS).status_column(SUMMARY_STATUS_COLUMN)
+-    updated = display_time((snapshot or {}).get("generated"))
+-    for number, row in enumerate(summary_records(snapshot), 1):
+-        table.add([
+-            number, row["project"], row["up3"], row["category"],
+-            row["material"], row["unit"], row["awal"], row["akhir"],
+-            row["delta"], row["masuk"], row["keluar"], row["revision"],
+-            row["plan_status"], row["realisasi"], row["actual_delta"],
+-            row["actual_status"], updated,
+-        ])
+-    return table.finish()
+-
+-
+-def validate_summary_reconciliation(snapshot):
+-    """Pastikan total proyek persis sama dengan jumlah seluruh UP3."""
+-    rows = summary_records(snapshot)
+-    fields = ("awal", "akhir", "realisasi", "masuk", "keluar")
+-    detail, totals = {}, {}
+-    for row in rows:
+-        key = (row["project"], row["material"])
+-        target = totals if row["up3"] == SUMMARY_PROJECT_TOTAL_UP3 else detail
+-        bucket = target.setdefault(key, {field: 0.0 for field in fields})
+-        for field in fields:
+-            if row[field] != "":
+-                bucket[field] += _number(row[field])
+-    problems = []
+-    for key in set(detail) | set(totals):
+-        for field in fields:
+-            if abs(detail.get(key, {}).get(field, 0.0) -
+-                   totals.get(key, {}).get(field, 0.0)) > 1e-6:
+-                problems.append("{} {} {}".format(key[0], key[1], field))
+-    if problems:
+-        raise ValueError("Rekonsiliasi Ringkasan Kebutuhan gagal: " +
+-                         ", ".join(problems))
+-    return True
+-
+-
+ def _metadata_index(snapshot):
+     """Indeks metadata Lokasi Proyek, dikunci ``id_lokasi`` DAN nama.
+ 
+     Sumbernya ``location_metadata`` yang disiapkan sinkronisasi dari master
+-    Lokasi Proyek -- indeks yang SAMA untuk keempat sheet. Kunci ID dibiarkan
++    Lokasi Proyek -- indeks yang SAMA untuk kelima sheet. Kunci ID dibiarkan
+     apa adanya; kunci nama dinormalkan supaya "Bigo  Selatan II" dan "Bigo
+     Selatan II" tetap bertemu record yang sama.
+     """
+@@ -2673,7 +2457,7 @@
+ )
+ POINT_WIDTH = len(POINT_HEADERS)
+ POINT_COLUMN_WIDTHS = [
+-    45, 190, 180, 140, 110, 110, 150, 150, 160, 160,
++    45, 190, 180, 110, 110, 150, 150, 160, 160,
+     120, 120, 120, 110, 150, 140, 140, 140,
+ ]
+ 
+@@ -2731,8 +2515,182 @@
+     return table.finish()
+ 
+ 
++# ---------------------------------------------------------------------------
++# SHEET 6-8 -- PROGRESS PEKERJAAN
++# ---------------------------------------------------------------------------
++PROGRESS_LOCATION_HEADERS = [
++    "No", "Judul Proyek", "Lokasi Proyek", "Paket", "Tahap", "UP3",
++    "ULP", "Vendor MDU", "Vendor Jasa", "Tahap Pekerjaan", "Status",
++    "Progress (%)", "Catatan / Revisi", "Update Terakhir",
++]
++PROGRESS_UP3_HEADERS = [
++    "No", "Judul Proyek", "UP3", "Total Lokasi", "Belum Dikerjakan",
++    "Dalam Proses", "Selesai", "Progress (%)", "Update Terakhir",
++]
++PROGRESS_PROJECT_HEADERS = [
++    "No", "Judul Proyek", "Total UP3", "Total Lokasi",
++    "Belum Dikerjakan", "Dalam Proses", "Selesai", "Progress (%)",
++    "Update Terakhir",
++]
++
++_PROGRESS_LOCATION_WIDTHS = [
++    45, 190, 180, 110, 110, 145, 145, 155, 155, 165, 125, 110, 240, 145,
++]
++_PROGRESS_SUMMARY_WIDTHS = [45, 190, 145, 105, 125, 115, 95, 110, 145]
++
++
++def _work_status(stage, explicit=""):
++    """Status existing; fallback hanya mengikuti dua ujung tahap resmi."""
++    value = clean(explicit)
++    if value in STATUS_ORDER:
++        return value
++    stage_value = clean(stage).casefold()
++    if stage_value == "slo terbit":
++        return "Selesai"
++    if not stage_value or stage_value == "kontrak":
++        return "Belum Dikerjakan"
++    return "Dalam Proses"
++
++
++def _progress_percent(stage, value):
++    """Nilai progress tersimpan, dijepit 0..100 dan dikirim sebagai persen."""
++    if value is None or clean(value) == "":
++        defaults = {
++            "kontrak": 0.0, "penggalian": 15.0,
++            "penanaman tiang": 35.0, "pemasangan konstruksi": 55.0,
++            "penarikan jaringan": 75.0, "komisioning": 95.0,
++            "slo terbit": 100.0,
++        }
++        value = defaults.get(clean(stage).casefold(), 0.0)
++    return min(100.0, max(0.0, _number(value)))
++
++
++def progress_location_records(snapshot):
++    """Satu sumber kanonik bagi ketiga sheet progress, satu row per lokasi."""
++    records = list((snapshot or {}).get("locations") or [])
++    unique = {}
++    for record in records:
++        record = dict(record or {})
++        project = clean(record.get("judul_proyek"))
++        location = clean(
++            record.get("nama_proyek") or record.get("lokasi_proyek")
++            or record.get("location") or record.get("lokasi")
++        )
++        location_id = clean(record.get("id_lokasi"))
++        project_id = clean(record.get("id_proyek"))
++        if not location and not location_id:
++            continue
++        identity = (
++            project_id or norm_key(project),
++            location_id or norm_key(location),
++        )
++        stage = clean(record.get("current_stage")) or "Kontrak"
++        progress = _progress_percent(stage, record.get("progress_proyek"))
++        status = _work_status(stage, record.get("status_proyek"))
++        if status == "Selesai":
++            progress = 100.0
++        unique[identity] = {
++            "project": project,
++            "location": location,
++            "package": clean(record.get("paket")),
++            "phase": clean(record.get("tahap")),
++            "up3": clean(record.get("up3")),
++            "ulp": clean(record.get("ulp")),
++            "vendor_mdu": clean(record.get("vendor_mdu") or record.get("vendor")),
++            "vendor_jasa": clean(record.get("vendor_jasa")),
++            "work_stage": stage,
++            "status": status,
++            "progress": progress,
++            "notes": clean(record.get("keterangan")),
++            "updated": clean(record.get("last_update") or record.get("updated_at")),
++        }
++    return sorted(
++        unique.values(),
++        key=lambda row: (natural_key(row["project"]), natural_key(row["location"])),
++    )
++
++
++def build_progress_location_layout(snapshot):
++    table = FlatTable(
++        SHEET_PROGRESS_LOCATION, PROGRESS_LOCATION_HEADERS,
++        _PROGRESS_LOCATION_WIDTHS,
++    ).numbers({12: PERCENT_NUMBER_FORMAT}).status_column(11)
++    for number, row in enumerate(progress_location_records(snapshot), 1):
++        table.add([
++            number, row["project"], row["location"], row["package"],
++            row["phase"], row["up3"], row["ulp"], row["vendor_mdu"],
++            row["vendor_jasa"], row["work_stage"], row["status"],
++            row["progress"] / 100.0, row["notes"],
++            display_time(row["updated"]),
++        ])
++    return table.finish()
++
++
++def _progress_buckets(rows, key_fields):
++    buckets = {}
++    for row in rows:
++        key = tuple(row[field] for field in key_fields)
++        bucket = buckets.setdefault(key, {
++            "rows": [], "updates": [],
++            "Belum Dikerjakan": 0, "Dalam Proses": 0, "Selesai": 0,
++        })
++        bucket["rows"].append(row)
++        bucket[row["status"]] += 1
++        if row["updated"]:
++            bucket["updates"].append(row["updated"])
++    return buckets
++
++
++def build_progress_up3_layout(snapshot):
++    rows = progress_location_records(snapshot)
++    table = FlatTable(
++        SHEET_PROGRESS_UP3, PROGRESS_UP3_HEADERS, _PROGRESS_SUMMARY_WIDTHS,
++    ).numbers({4: INTEGER_NUMBER_FORMAT, 5: INTEGER_NUMBER_FORMAT,
++               6: INTEGER_NUMBER_FORMAT, 7: INTEGER_NUMBER_FORMAT,
++               8: PERCENT_NUMBER_FORMAT})
++    buckets = _progress_buckets(rows, ("project", "up3"))
++    for number, key in enumerate(sorted(
++            buckets, key=lambda item: (natural_key(item[0]), natural_key(item[1]))
++    ), 1):
++        project, up3 = key
++        bucket = buckets[key]
++        count = len(bucket["rows"])
++        average = sum(row["progress"] for row in bucket["rows"]) / count
++        table.add([
++            number, project, up3, count, bucket["Belum Dikerjakan"],
++            bucket["Dalam Proses"], bucket["Selesai"], average / 100.0,
++            display_time(max(bucket["updates"]) if bucket["updates"] else ""),
++        ])
++    return table.finish()
++
++
++def build_progress_project_layout(snapshot):
++    rows = progress_location_records(snapshot)
++    table = FlatTable(
++        SHEET_PROGRESS_PROJECT, PROGRESS_PROJECT_HEADERS,
++        _PROGRESS_SUMMARY_WIDTHS,
++    ).numbers({3: INTEGER_NUMBER_FORMAT, 4: INTEGER_NUMBER_FORMAT,
++               5: INTEGER_NUMBER_FORMAT, 6: INTEGER_NUMBER_FORMAT,
++               7: INTEGER_NUMBER_FORMAT, 8: PERCENT_NUMBER_FORMAT})
++    buckets = _progress_buckets(rows, ("project",))
++    for number, key in enumerate(sorted(
++            buckets, key=lambda item: natural_key(item[0])
++    ), 1):
++        project = key[0]
++        bucket = buckets[key]
++        count = len(bucket["rows"])
++        average = sum(row["progress"] for row in bucket["rows"]) / count
++        total_up3 = len({row["up3"] for row in bucket["rows"] if row["up3"]})
++        table.add([
++            number, project, total_up3, count, bucket["Belum Dikerjakan"],
++            bucket["Dalam Proses"], bucket["Selesai"], average / 100.0,
++            display_time(max(bucket["updates"]) if bucket["updates"] else ""),
++        ])
++    return table.finish()
++
++
+ def build_control_payload(snapshot):
+-    """Enam sheet final sebagai ``[(judul, layout)]``, dalam urutan tab.
++    """Delapan sheet final sebagai ``[(judul, layout)]``, dalam urutan tab.
+ 
+     Urutannya SAMA dengan :data:`CONTROL_SHEETS`; pengatur urutan tab membaca
+     daftar itu, sehingga keduanya tidak dapat berbeda (§G langkah 8).
+@@ -2747,8 +2705,10 @@
+         (SHEET_POLES, build_tiang_layout(snapshot)),
+         (SHEET_KONSTRUKSI, build_konstruksi_tiang_layout(snapshot)),
+         (SHEET_PINDAH, build_pindah_layout(snapshot)),
+-        (SHEET_RINGKASAN, build_ringkasan_layout(snapshot)),
+         (SHEET_TITIK, build_titik_layout(snapshot)),
++        (SHEET_PROGRESS_LOCATION, build_progress_location_layout(snapshot)),
++        (SHEET_PROGRESS_UP3, build_progress_up3_layout(snapshot)),
++        (SHEET_PROGRESS_PROJECT, build_progress_project_layout(snapshot)),
+     ]
+ 
+ 
+@@ -2762,7 +2722,6 @@
+                for title, count in counts.items() if int(count) > 0 and outputs.get(title, 0) == 0]
+     if invalid:
+         raise ValueError("Sinkronisasi dibatalkan; spreadsheet tidak diubah. " + "; ".join(invalid))
+-    validate_summary_reconciliation(snapshot)
+     return outputs
+ 
+ 
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/tests/test_audit_implementation.py work/pln_gambar_jaringan_sederhana_qgis4/tests/test_audit_implementation.py
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/tests/test_audit_implementation.py	2026-09-09 14:39:06.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/tests/test_audit_implementation.py	2026-09-10 17:40:18.434611411 +0900
+@@ -159,11 +159,11 @@
+             'konstruksi':[{'jenis':'TR-3','awal':2,'akhir':2,'realisasi':1,'id_lokasi':'A','lokasi':'Lokasi A'}]}}
+         layouts=dict(schema.build_control_payload(snapshot))
+         self.assertEqual(2,layouts['Tiang'].used_rows())
+-        self.assertEqual(2,layouts['KONSTRUKSI TIANG'].used_rows())
++        self.assertEqual(2,layouts['Konstruksi Tiang'].used_rows())
+ if __name__=='__main__':unittest.main()
+ 
+ class EndToEndControlTests(unittest.TestCase):
+-    def test_production_boq_to_all_five_sheet_builders(self):
++    def test_production_boq_to_all_eight_sheet_builders(self):
+         import construction_display as display
+         class Harness:
+             BOQ_CABLE_ITEMS=(boq.CABLE_SUTM,boq.CABLE_SUTR)
+@@ -196,7 +196,7 @@
+         layouts=dict(schema.build_control_payload({'kontrol_kabel':cables,'kontrol_tiang':poles}))
+         self.assertGreater(layouts['Kabel'].used_rows(),1, repr((payload['rows'],cables)))
+         self.assertGreater(layouts['Tiang'].used_rows(),1)
+-        self.assertGreater(layouts['KONSTRUKSI TIANG'].used_rows(),1)
++        self.assertGreater(layouts['Konstruksi Tiang'].used_rows(),1)
+         Harness._control_cable_rows=staticmethod(method('_control_cable_rows',env))
+         Harness._control_pole_rows=staticmethod(method('_control_pole_rows',env))
+         Harness.material_control_snapshot=method('material_control_snapshot',env)
+@@ -208,9 +208,14 @@
+             'data_mode':data_stage,'lat':1.0,'lon':124.0} for loc in ('A','B','C') for data_stage in stage.BOQ_STAGES]
+         snapshot['kontrol_pindah']=[{'lokasi_asal':'Lokasi A','lokasi_tujuan':'Lokasi B',
+             'item':'Kabel SUTR','jumlah':10,'satuan':'m'}]
+-        snapshot['source_counts']={'Kabel':9,'Tiang':9,'KONSTRUKSI TIANG':9,'Titik Koordinat':9,'Pindah Lokasi':1}
++        snapshot['source_counts']={'Kabel':9,'Tiang':9,'Konstruksi Tiang':9,'Titik Koordinat':9,'Pindah Lokasi':1}
+         outputs=schema.validate_control_snapshot(snapshot,schema.build_control_payload(snapshot))
+-        self.assertEqual({'Kabel':18,'Tiang':3,'KONSTRUKSI TIANG':6,'Titik Koordinat':9,'Pindah Lokasi':1},outputs)
++        self.assertEqual({
++            'Kabel': 18, 'Tiang': 3, 'Konstruksi Tiang': 6,
++            'Titik Koordinat': 9, 'Pindah Lokasi': 1,
++            'Progress per Lokasi': 0, 'Progress per UP3': 0,
++            'Progress per Judul Proyek': 0,
++        }, outputs)
+ 
+ 
+ class AtomicWriterTests(unittest.TestCase):
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/tests/test_control_sheets.py work/pln_gambar_jaringan_sederhana_qgis4/tests/test_control_sheets.py
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/tests/test_control_sheets.py	2026-09-10 11:22:27.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/tests/test_control_sheets.py	2026-09-10 17:39:41.461933136 +0900
+@@ -216,26 +216,36 @@
+ 
+ 
+ class SheetIdentityTests(unittest.TestCase):
+-    """§A1/§G — nama PERSIS, empat sheet, dan urutan tab yang tetap."""
++    """§A1/§G — nama PERSIS, lima sheet, dan urutan tab yang tetap."""
+ 
+     def test_the_names_carry_no_number_prefix(self):
+         self.assertEqual(schema.SHEET_KABEL, "Kabel")
+         self.assertEqual(schema.SHEET_POLES, "Tiang")
+-        self.assertEqual(schema.SHEET_KONSTRUKSI, "KONSTRUKSI TIANG")
++        self.assertEqual(schema.SHEET_KONSTRUKSI, "Konstruksi Tiang")
+         self.assertEqual(schema.SHEET_PINDAH, "Pindah Lokasi")
+-        self.assertEqual(schema.SHEET_RINGKASAN, "RINGKASAN KEBUTUHAN")
+         self.assertEqual(schema.SHEET_TITIK, "Titik Koordinat")
++        self.assertEqual(schema.SHEET_PROGRESS_LOCATION, "Progress per Lokasi")
++        self.assertEqual(schema.SHEET_PROGRESS_UP3, "Progress per UP3")
++        self.assertEqual(schema.SHEET_PROGRESS_PROJECT,
++                         "Progress per Judul Proyek")
+ 
+     def test_exact_names_and_order(self):
+         self.assertEqual(
+-            ("Kabel", "Tiang", "KONSTRUKSI TIANG", "Pindah Lokasi",
+-             "RINGKASAN KEBUTUHAN", "Titik Koordinat"),
++            ("Kabel", "Tiang", "Konstruksi Tiang", "Pindah Lokasi",
++             "Titik Koordinat", "Progress per Lokasi", "Progress per UP3",
++             "Progress per Judul Proyek"),
+             schema.CONTROL_SHEETS,
+         )
+ 
+-    def test_the_whitelist_is_exactly_those_six(self):
++    def test_the_whitelist_is_exactly_those_eight(self):
+         self.assertEqual(schema.SHEET_WHITELIST, schema.CONTROL_SHEETS)
+-        self.assertEqual(6, len(schema.SHEET_WHITELIST))
++        self.assertEqual(8, len(schema.SHEET_WHITELIST))
++
++    def test_obsolete_detail_and_summary_sheets_are_not_managed(self):
++        for title in ("RINGKASAN KEBUTUHAN", "Rencana Awal",
++                      "Rencana Akhir", "Realisasi"):
++            self.assertNotIn(title, schema.CONTROL_SHEETS)
++            self.assertNotIn(title, schema.SHEET_WHITELIST)
+ 
+     def test_no_preview_maps_sheet_is_managed_any_more(self):
+         """Integrasi Preview Maps -> Spreadsheet dibatalkan (v6.17.0).
+@@ -252,7 +262,7 @@
+         titles = [title for title, _ in schema.build_control_payload(snapshot())]
+         self.assertEqual(list(schema.CONTROL_SHEETS), titles)
+ 
+-    def test_an_empty_snapshot_still_builds_all_four(self):
++    def test_an_empty_snapshot_still_builds_all_five(self):
+         titles = [title for title, _ in schema.build_control_payload({})]
+         self.assertEqual(list(schema.CONTROL_SHEETS), titles)
+ 
+@@ -330,9 +340,9 @@
+     def setUp(self):
+         self.layouts = dict(schema.build_control_payload(snapshot()))
+ 
+-    def test_the_shared_metadata_columns_are_the_agreed_nine(self):
++    def test_the_shared_metadata_columns_are_the_agreed_eight(self):
+         self.assertEqual(
+-            ["Proyek", "Lokasi Proyek", "Desa", "Tahap", "Paket", "UP3",
++            ["Proyek", "Lokasi Proyek", "Tahap", "Paket", "UP3",
+              "ULP", "Vendor MDU", "Vendor Jasa"],
+             schema.PROJECT_COLUMNS,
+         )
+@@ -359,59 +369,19 @@
+         self.assertTrue(body(layout))
+         for value in column(layout, "Vendor MDU"):
+             self.assertEqual("PT MDU JAYA", value)
+-        for value in column(layout, "Desa"):
++        for value in column(layout, "Lokasi Proyek"):
+             self.assertEqual("Kali Selatan", value)
+ 
++    def test_no_final_sheet_exports_a_village_column(self):
++        for title, layout in self.layouts.items():
++            names = header(layout)
++            self.assertNotIn("Desa", names, title)
++            self.assertNotIn("Desa Asal", names, title)
++            self.assertNotIn("Desa Tujuan", names, title)
+ 
+-class RingkasanKebutuhanTests(unittest.TestCase):
+-    """Total proyek/UP3 berasal dari empat material final yang sama."""
+-
+-    def test_summary_sheet_is_part_of_every_sync(self):
+-        layouts = dict(schema.build_control_payload(snapshot()))
+-        self.assertIn(schema.SHEET_RINGKASAN, layouts)
+-        self.assertEqual(schema.SUMMARY_HEADERS, header(layouts[schema.SHEET_RINGKASAN]))
+-
+-    def test_all_four_materials_remain_separate(self):
+-        rows = schema.summary_records(snapshot())
+-        total = {
+-            row["material"] for row in rows
+-            if row["up3"] == schema.SUMMARY_PROJECT_TOTAL_UP3
+-        }
+-        self.assertEqual({"SUTM", "SUTR", "TM", "TR"}, total)
+-
+-    def test_cable_uses_requirement_not_kms(self):
+-        rows = schema.summary_records(snapshot())
+-        sutm = next(row for row in rows if row["material"] == "SUTM" and
+-                    row["up3"] == schema.SUMMARY_PROJECT_TOTAL_UP3)
+-        self.assertEqual(7725 + 2472, sutm["awal"])
+-        self.assertNotEqual(2.5 + 0.8, sutm["awal"])
+ 
+-    def test_project_total_equals_sum_of_up3(self):
+-        data = two_location_snapshot()
+-        data["location_metadata"]["LOC-TAL"]["up3"] = "Tahuna"
+-        self.assertTrue(schema.validate_summary_reconciliation(data))
+-        rows = schema.summary_records(data)
+-        detail = sum(row["akhir"] for row in rows if row["material"] == "SUTM"
+-                     and row["up3"] != schema.SUMMARY_PROJECT_TOTAL_UP3)
+-        total = next(row["akhir"] for row in rows if row["material"] == "SUTM"
+-                     and row["up3"] == schema.SUMMARY_PROJECT_TOTAL_UP3)
+-        self.assertEqual(detail, total)
+-
+-    def test_internal_transfer_keeps_both_trace_columns_and_zero_net(self):
+-        rows = schema.summary_records(snapshot())
+-        sutr = next(row for row in rows if row["material"] == "SUTR" and
+-                    row["up3"] == schema.SUMMARY_PROJECT_TOTAL_UP3)
+-        self.assertEqual(500, sutr["masuk"])
+-        self.assertEqual(500, sutr["keluar"])
+-        self.assertEqual(0, sutr["masuk"] - sutr["keluar"])
+-
+-    def test_plan_and_actual_deviations_use_different_targets(self):
+-        rows = schema.summary_records(snapshot())
+-        tm = next(row for row in rows if row["material"] == "TM" and
+-                  row["up3"] == schema.SUMMARY_PROJECT_TOTAL_UP3)
+-        self.assertEqual(tm["akhir"] - tm["awal"], tm["delta"])
+-        self.assertEqual(tm["realisasi"] - tm["akhir"], tm["actual_delta"])
+-        self.assertEqual("Kurang 1", tm["actual_status"])
++class MetadataFallbackTests(unittest.TestCase):
++    """Metadata kosong tetap aman tanpa menghidupkan kembali kolom Desa."""
+ 
+     def test_an_empty_metadata_field_stays_blank_not_a_dash(self):
+         """Sel kosong dapat disaring "(Blanks)"; "-" menjadi nilai literal.
+@@ -424,7 +394,7 @@
+         data["kontrol_context"] = {}
+         data["location_metadata"] = {}
+         layout = schema.build_kabel_layout(data)
+-        self.assertEqual([""] * len(body(layout)), column(layout, "Desa"))
++        self.assertNotIn("Desa", header(layout))
+         self.assertEqual([""] * len(body(layout)), column(layout, "Paket"))
+ 
+     def test_the_row_keeps_its_location_name_even_without_a_master(self):
+@@ -449,7 +419,7 @@
+     sheet memakai ``resolve_location_metadata()`` yang sama.
+     """
+ 
+-    #: Sembilan kolom metadata, sesuai urutan ``PROJECT_COLUMNS``.
++    #: Delapan kolom metadata, sesuai urutan ``PROJECT_COLUMNS``.
+     FIELDS = tuple(schema.PROJECT_COLUMNS)
+ 
+     def setUp(self):
+@@ -459,7 +429,7 @@
+         values = LOCATION_METADATA[key]
+         return [
+             values[name] for name in (
+-                "proyek", "lokasi", "desa", "tahap", "paket", "up3", "ulp",
++                "proyek", "lokasi", "tahap", "paket", "up3", "ulp",
+                 "vendor_mdu", "vendor_jasa",
+             )
+         ]
+@@ -572,7 +542,7 @@
+ 
+     def test_the_columns_match_the_specification(self):
+         self.assertEqual(
+-            ["No", "Proyek", "Lokasi Proyek", "Desa", "Tahap", "Paket", "UP3",
++            ["No", "Proyek", "Lokasi Proyek", "Tahap", "Paket", "UP3",
+              "ULP", "Vendor MDU", "Vendor Jasa", "Klasifikasi", "Jenis Kabel",
+              "Tahap Data", "KMS", "Kebutuhan Kabel", "Alokasi Saat Ini",
+              "Saldo / Deviasi", "Status", "Tanggal Update"],
+@@ -682,7 +652,7 @@
+ 
+     def test_the_columns_match_the_specification(self):
+         self.assertEqual(
+-            ["No", "Proyek", "Lokasi Proyek", "Desa", "Tahap", "Paket", "UP3",
++            ["No", "Proyek", "Lokasi Proyek", "Tahap", "Paket", "UP3",
+              "ULP", "Vendor MDU", "Vendor Jasa", "Jenis Tiang",
+              "Jenis / Spesifikasi", "Rencana Awal", "Rencana Akhir",
+              "Perubahan", "Realisasi", "Status Realisasi",
+@@ -746,11 +716,11 @@
+     def test_the_sheet_exists_in_the_payload(self):
+         """TEST 2."""
+         titles = [title for title, _ in schema.build_control_payload(snapshot())]
+-        self.assertIn("KONSTRUKSI TIANG", titles)
++        self.assertIn("Konstruksi Tiang", titles)
+ 
+     def test_the_columns_match_the_specification(self):
+         self.assertEqual(
+-            ["No", "Proyek", "Lokasi Proyek", "Desa", "Tahap", "Paket", "UP3",
++            ["No", "Proyek", "Lokasi Proyek", "Tahap", "Paket", "UP3",
+              "ULP", "Vendor MDU", "Vendor Jasa", "Klasifikasi Tiang",
+              "Konstruksi", "Rencana Awal", "Rencana Akhir",
+              "Perubahan Desain", "Realisasi", "Status Realisasi",
+@@ -1002,7 +972,7 @@
+             ["No", "Tanggal", "Proyek", "Material", "Klasifikasi",
+              "Jenis / Spesifikasi", "Satuan", "Tahap", "Paket", "UP3", "ULP",
+              "Vendor MDU", "Vendor Jasa",
+-             "Dari Lokasi", "Desa Asal", "Ke Lokasi", "Desa Tujuan",
++             "Dari Lokasi", "Ke Lokasi",
+              "Qty Dipindahkan", "Sisa Lokasi Asal",
+              "Kebutuhan Lokasi Tujuan", "Status", "Catatan"],
+             schema.MOVE_HEADERS,
+@@ -1021,10 +991,11 @@
+             ["Talawaan", "Pineleng"], column(self.layout, "Dari Lokasi")
+         )
+ 
+-    def test_both_villages_are_resolved_from_the_location_master(self):
++    def test_both_locations_are_written_without_village_columns(self):
+         entry = rows_where(self.layout, **{"Dari Lokasi": "Talawaan"})[0]
+-        self.assertEqual("Talawaan", entry["Desa Asal"])
+-        self.assertEqual("Kali Selatan", entry["Desa Tujuan"])
++        self.assertEqual("Kali Selatan", entry["Ke Lokasi"])
++        self.assertNotIn("Desa Asal", entry)
++        self.assertNotIn("Desa Tujuan", entry)
+ 
+     def test_the_vendor_follows_the_source_location(self):
+         """Kedua lokasi bisa berbeda vendornya; yang dicatat adalah ASAL."""
+@@ -1055,16 +1026,16 @@
+             # "Tahap Data" (tiga tahap gambar) dan "Status Tiang"
+             # (Eksisting/Rencana/Realisasi) adalah DUA fakta terpisah; itu
+             # tetap berlaku dan tidak ikut dibatalkan bersama Preview Maps.
+-            ["No", "Proyek", "Lokasi Proyek", "Desa", "Tahap", "Paket", "UP3",
++            ["No", "Proyek", "Lokasi Proyek", "Tahap", "Paket", "UP3",
+              "ULP", "Vendor MDU", "Vendor Jasa", "Tahap Data", "Status Tiang",
+              "ID Tiang", "Klasifikasi", "Tipe Konstruksi", "Latitude",
+              "Longitude", "Tanggal Update"],
+             schema.POINT_HEADERS,
+         )
+ 
+-    def test_every_village_shares_the_one_sheet(self):
++    def test_every_location_shares_the_one_sheet(self):
+         self.assertEqual(
+-            ["Kali Selatan", "Talawaan"], column(self.layout, "Desa")
++            ["Kali Selatan", "Talawaan"], column(self.layout, "Lokasi Proyek")
+         )
+ 
+     def test_the_metadata_follows_each_location(self):
+@@ -1113,6 +1084,94 @@
+         self.assertEqual(["Lokasi Baru"], column(layout, "Lokasi Proyek"))
+ 
+ 
++class ProgressSheetTests(unittest.TestCase):
++    """Tiga ringkasan progress berasal dari satu daftar lokasi kanonik."""
++
++    @staticmethod
++    def location(identifier, project, name, up3, progress, stage="Penggalian",
++                 status="Dalam Proses"):
++        return {
++            "id_lokasi": identifier, "id_proyek": "P-" + project,
++            "judul_proyek": project, "nama_proyek": name,
++            "paket": "Paket 1", "tahap": "Tahap 1", "up3": up3,
++            "ulp": "ULP A", "vendor_mdu": "MDU A",
++            "vendor_jasa": "Jasa A", "current_stage": stage,
++            "status_proyek": status, "progress_proyek": progress,
++            "keterangan": "Catatan " + name,
++            "last_update": "2026-09-10 10:00:00",
++        }
++
++    def test_one_location_is_one_row_with_existing_fields(self):
++        data = {"locations": [self.location(
++            "L1", "APBN 2026", "Lokasi A", "Manado", 50
++        )]}
++        layout = schema.build_progress_location_layout(data)
++        self.assertEqual(1, len(body(layout)))
++        entry = dict(zip(header(layout), body(layout)[0]))
++        self.assertEqual("APBN 2026", entry["Judul Proyek"])
++        self.assertEqual("Lokasi A", entry["Lokasi Proyek"])
++        self.assertEqual("Manado", entry["UP3"])
++        self.assertEqual("MDU A", entry["Vendor MDU"])
++        self.assertEqual("Jasa A", entry["Vendor Jasa"])
++        self.assertEqual("Dalam Proses", entry["Status"])
++        self.assertEqual(0.5, entry["Progress (%)"])
++        self.assertEqual("Catatan Lokasi A", entry["Catatan / Revisi"])
++
++    def test_duplicate_location_id_is_not_counted_twice(self):
++        first = self.location("L1", "APBN 2026", "Lokasi A", "Manado", 25)
++        latest = dict(first, progress_proyek=50)
++        rows = schema.progress_location_records({"locations": [first, latest]})
++        self.assertEqual(1, len(rows))
++        self.assertEqual(50, rows[0]["progress"])
++
++    def test_up3_average_and_status_counts_use_unique_locations(self):
++        locations = [
++            self.location("L1", "APBN 2026", "A", "Manado", 100,
++                          "SLO Terbit", "Selesai"),
++            self.location("L2", "APBN 2026", "B", "Manado", 50),
++            self.location("L3", "APBN 2026", "C", "Manado", 0,
++                          "Kontrak", "Belum Dikerjakan"),
++        ]
++        layout = schema.build_progress_up3_layout({"locations": locations})
++        entry = dict(zip(header(layout), body(layout)[0]))
++        self.assertEqual(3, entry["Total Lokasi"])
++        self.assertEqual(1, entry["Belum Dikerjakan"])
++        self.assertEqual(1, entry["Dalam Proses"])
++        self.assertEqual(1, entry["Selesai"])
++        self.assertEqual(0.5, entry["Progress (%)"])
++
++    def test_project_average_is_weighted_by_locations_not_up3(self):
++        locations = []
++        for number in range(10):
++            locations.append(self.location(
++                "A{}".format(number), "APBN 2026", "A{}".format(number),
++                "Manado", 100, "SLO Terbit", "Selesai",
++            ))
++        for number in range(90):
++            locations.append(self.location(
++                "B{}".format(number), "APBN 2026", "B{}".format(number),
++                "Tahuna", 0, "Kontrak", "Belum Dikerjakan",
++            ))
++        layout = schema.build_progress_project_layout({"locations": locations})
++        entry = dict(zip(header(layout), body(layout)[0]))
++        self.assertEqual(2, entry["Total UP3"])
++        self.assertEqual(100, entry["Total Lokasi"])
++        self.assertEqual(0.1, entry["Progress (%)"])
++
++    def test_projects_with_the_same_up3_never_mix(self):
++        locations = [
++            self.location("L1", "APBN 2026", "Lokasi Sama", "Manado", 100,
++                          "SLO Terbit", "Selesai"),
++            self.location("L2", "APBN 2027", "Lokasi Sama", "Manado", 0,
++                          "Kontrak", "Belum Dikerjakan"),
++        ]
++        layout = schema.build_progress_up3_layout({"locations": locations})
++        entries = [dict(zip(header(layout), row)) for row in body(layout)]
++        self.assertEqual(2, len(entries))
++        self.assertEqual({"APBN 2026", "APBN 2027"},
++                         {entry["Judul Proyek"] for entry in entries})
++        self.assertEqual({0.0, 1.0}, {entry["Progress (%)"] for entry in entries})
++
+ class StatusRuleTests(unittest.TestCase):
+     """§5/§7 — satu aturan status, dipakai kedua sheet."""
+ 
+@@ -1158,7 +1217,7 @@
+             self.layouts,
+         )
+ 
+-    def test_the_four_sheets_are_created_when_missing(self):
++    def test_the_five_sheets_are_created_when_missing(self):
+         added = [
+             request["addSheet"]["properties"]["title"]
+             for request in self._run(sheet_metadata()) if "addSheet" in request
+@@ -1190,7 +1249,7 @@
+ 
+     def test_the_old_filter_is_cleared_before_the_new_data(self):
+         requests = self._run()
+-        for sheet_id in (100, 101, 102, 103, 104, 105):
++        for sheet_id in range(100, 108):
+             self.assertTrue(
+                 any(
+                     request.get("clearBasicFilter", {}).get("sheetId")
+@@ -1209,7 +1268,7 @@
+             if body_:
+                 sheet = body_["filter"]["range"]["sheetId"]
+                 counts[sheet] = counts.get(sheet, 0) + 1
+-        self.assertEqual({100: 1, 101: 1, 102: 1, 103: 1, 104: 1, 105: 1}, counts)
++        self.assertEqual({sheet_id: 1 for sheet_id in range(100, 108)}, counts)
+ 
+     def test_no_range_is_empty(self):
+         for request in self._run():
+@@ -1308,7 +1367,7 @@
+             )
+         }
+         self.assertNotIn(100, targets)
+-        self.assertEqual({101, 102, 103, 104, 105}, targets)
++        self.assertEqual(set(range(101, 108)), targets)
+ 
+     def test_the_filter_range_is_zero_based_and_half_open(self):
+         payload = schema.build_control_payload(snapshot())
+@@ -1373,8 +1432,9 @@
+     def test_a_missing_sheet_is_reported_by_name(self):
+         metadata = self._metadata("Kabel", "Tiang")
+         self.assertEqual(
+-            ["KONSTRUKSI TIANG", "Pindah Lokasi", "RINGKASAN KEBUTUHAN",
+-             "Titik Koordinat"],
++            ["Konstruksi Tiang", "Pindah Lokasi", "Titik Koordinat",
++             "Progress per Lokasi", "Progress per UP3",
++             "Progress per Judul Proyek"],
+             self.builders["missing_final_sheets"](metadata),
+         )
+ 
+@@ -1384,8 +1444,11 @@
+ 
+     def test_every_sheet_outside_the_whitelist_is_deleted(self):
+         metadata = self._metadata(
+-            "Kabel", "Tiang", "KONSTRUKSI TIANG", "Pindah Lokasi",
+-            "RINGKASAN KEBUTUHAN", "Titik Koordinat",
++            "Kabel", "Tiang", "Konstruksi Tiang", "Pindah Lokasi",
++            "Titik Koordinat", "Progress per Lokasi", "Progress per UP3",
++            "Progress per Judul Proyek", "KONSTRUKSI TIANG",
++            "RINGKASAN KEBUTUHAN", "Rencana Awal",
++            "Rencana Akhir", "Realisasi",
+             "Sheet1", "01_DASHBOARD", "Kontrol Material", "1. Kabel",
+             "Kabel (1)", "08_SYNC_LOG",
+         )
+@@ -1394,7 +1457,7 @@
+             for request in self.builders["sheet_cleanup_requests"](metadata)
+             if "deleteSheet" in request
+         }
+-        self.assertEqual({106, 107, 108, 109, 110, 111}, deleted)
++        self.assertEqual(set(range(108, 119)), deleted)
+ 
+     def test_a_leftover_preview_maps_tab_is_cleaned_up(self):
+         """Tab sisa implementasi lama ikut terhapus lewat mekanisme yang ada.
+@@ -1402,7 +1465,7 @@
+         Tidak ada jalur penghapusan khusus: ``Preview Maps`` bukan lagi sheet
+         terkelola, jadi ia dihapus oleh cleanup yang sama yang membersihkan
+         "Sheet1" dan tab bernomor lama -- dan seperti biasa HANYA sesudah
+-        kelima sheet final dipastikan sudah ada.
++        kedelapan sheet final dipastikan sudah ada.
+         """
+         metadata = self._metadata(
+             *(list(schema.SHEET_WHITELIST) + ["Preview Maps"])
+@@ -1412,7 +1475,7 @@
+             for request in self.builders["sheet_cleanup_requests"](metadata)
+             if "deleteSheet" in request
+         }
+-        self.assertEqual({106}, deleted)
++        self.assertEqual({108}, deleted)
+ 
+     def test_the_final_sheets_are_never_deleted(self):
+         metadata = self._metadata(*(list(schema.SHEET_WHITELIST) + ["Sheet1"]))
+@@ -1421,7 +1484,7 @@
+             for request in self.builders["sheet_cleanup_requests"](metadata)
+             if "deleteSheet" in request
+         }
+-        self.assertEqual({106}, deleted)
++        self.assertEqual({108}, deleted)
+ 
+     def test_a_clean_workbook_needs_no_request_at_all(self):
+         metadata = self._metadata(*schema.SHEET_WHITELIST)
+@@ -1431,17 +1494,18 @@
+ 
+     def test_the_tabs_are_put_into_the_agreed_order(self):
+         metadata = self._metadata(
+-            "Titik Koordinat", "RINGKASAN KEBUTUHAN", "Pindah Lokasi",
+-            "KONSTRUKSI TIANG", "Tiang", "Kabel",
++            "Progress per Judul Proyek", "Progress per UP3",
++            "Progress per Lokasi", "Titik Koordinat", "Pindah Lokasi",
++            "Konstruksi Tiang", "Tiang", "Kabel",
+         )
+         ordered = [
+             (request["updateSheetProperties"]["properties"]["sheetId"],
+              request["updateSheetProperties"]["properties"]["index"])
+             for request in self.builders["sheet_order_requests"](metadata)
+         ]
+-        # Konstruksi sudah di index 3 pada input dan ikut dipindah ke index 2.
+         self.assertEqual(
+-            [(105, 0), (104, 1), (103, 2), (102, 3), (101, 4), (100, 5)],
++            [(107, 0), (106, 1), (105, 2), (104, 3),
++             (103, 4), (102, 5), (101, 6), (100, 7)],
+             ordered,
+         )
+ 
+@@ -1466,7 +1530,7 @@
+ 
+ 
+ class SyncContractTests(unittest.TestCase):
+-    """Keempatnya benar-benar tersambung ke sinkronisasi manual."""
++    """Kelima sheet benar-benar tersambung ke sinkronisasi manual."""
+ 
+     @classmethod
+     def setUpClass(cls):
+@@ -1478,12 +1542,12 @@
+         self.assertIn("schema.build_control_payload(self._snapshot)", self.sync)
+ 
+     def test_the_numbered_tabs_are_no_longer_written(self):
+-        """Workbook final hanya berisi empat sheet (§A1)."""
++        """Workbook final hanya berisi lima sheet (§A1)."""
+         self.assertNotIn("schema.build_sheet_payload(", self.sync)
+         self.assertNotIn("schema.build_monitoring_payload(", self.sync)
+         self.assertNotIn("LogOnlyThread", self.sync)
+ 
+-    def test_a_new_workbook_is_created_with_those_four_sheets(self):
++    def test_a_new_workbook_is_created_with_those_five_sheets(self):
+         body_ = self.client[self.client.index("def create_spreadsheet"):]
+         body_ = body_[: body_.index("\n    # -- penulisan")]
+         self.assertIn("schema.SHEET_WHITELIST", body_)
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/tests/test_spreadsheet_binding.py work/pln_gambar_jaringan_sederhana_qgis4/tests/test_spreadsheet_binding.py
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/tests/test_spreadsheet_binding.py	2026-09-10 11:25:44.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/tests/test_spreadsheet_binding.py	2026-09-10 17:35:55.513778798 +0900
+@@ -311,7 +311,7 @@
+         for source in (self.sync, self.client):
+             self.assertNotIn("docs.google.com/spreadsheets/d/1", source)
+ 
+-    def test_the_workbook_holds_exactly_the_six_final_sheets(self):
++    def test_the_workbook_holds_exactly_the_eight_final_sheets(self):
+         """Satu workbook per project, termasuk Ringkasan Kebutuhan.
+ 
+         ``KONSTRUKSI TIANG`` menyusul sebagai sheet kelima: jenis tiang
+@@ -319,8 +319,9 @@
+         yang berbeda dan tidak boleh berbagi satu tabel.
+         """
+         self.assertEqual(
+-            ("Kabel", "Tiang", "KONSTRUKSI TIANG", "Pindah Lokasi",
+-             "RINGKASAN KEBUTUHAN", "Titik Koordinat"),
++            ("Kabel", "Tiang", "Konstruksi Tiang", "Pindah Lokasi",
++             "Titik Koordinat", "Progress per Lokasi", "Progress per UP3",
++             "Progress per Judul Proyek"),
+             schema.CONTROL_SHEETS,
+         )
+         self.assertIn("schema.build_control_payload(self._snapshot)", self.sync)
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' baseline/pln_gambar_jaringan_sederhana_qgis4/tests/test_sync_has_no_drive_calls.py work/pln_gambar_jaringan_sederhana_qgis4/tests/test_sync_has_no_drive_calls.py
+--- baseline/pln_gambar_jaringan_sederhana_qgis4/tests/test_sync_has_no_drive_calls.py	2026-09-10 11:25:45.000000000 +0900
++++ work/pln_gambar_jaringan_sederhana_qgis4/tests/test_sync_has_no_drive_calls.py	2026-09-10 17:35:56.393795317 +0900
+@@ -84,10 +84,11 @@
+         ):
+             self.assertFalse(hasattr(schema, forbidden), forbidden)
+ 
+-    def test_the_managed_sheets_are_the_six_data_sheets(self):
++    def test_the_managed_sheets_are_the_eight_data_sheets(self):
+         self.assertEqual(
+-            ("Kabel", "Tiang", "KONSTRUKSI TIANG", "Pindah Lokasi",
+-             "RINGKASAN KEBUTUHAN", "Titik Koordinat"),
++            ("Kabel", "Tiang", "Konstruksi Tiang", "Pindah Lokasi",
++             "Titik Koordinat", "Progress per Lokasi", "Progress per UP3",
++             "Progress per Judul Proyek"),
+             schema.CONTROL_SHEETS,
+         )
+         titles = [title for title, _ in schema.build_control_payload({})]
