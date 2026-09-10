@@ -1,0 +1,784 @@
+--- a/CLAUDE.md	2026-09-10 21:44:18.000000000 -0400
++++ b/CLAUDE.md	2026-09-10 19:07:44.099117032 -0400
+@@ -1,4 +1,4 @@
+-# SIGAMON v6.17.11
++# SIGAMON v6.17.12
+ 
+ Workspace pengembangan plugin QGIS SIGAMON. Judul Proyek adalah batas data
+ tertinggi: dua Judul Proyek tetap dua dataset walaupun desa, nama Lokasi
+--- a/README.txt	2026-09-10 21:44:18.000000000 -0400
++++ b/README.txt	2026-09-10 19:07:43.331113961 -0400
+@@ -1,4 +1,5 @@
+-SIGAMON v6.17.11
++SIGAMON v6.17.12
++Lihat AUDIT_v6.17.12.md untuk edit jarak perhitungan tanpa menggeser jaringan.
+ Lihat AUDIT_v6.17.11.md untuk penyamaan konsep tabel sheet Tiang dengan Kabel.
+ Lihat AUDIT_v6.17.10.md untuk hotfix migrasi kapitalisasi nama sheet.
+ Lihat AUDIT_v6.17.9.md untuk tiga sheet monitoring progress dan penamaan
+--- a/metadata.txt	2026-09-10 21:44:14.000000000 -0400
++++ b/metadata.txt	2026-09-10 19:07:40.715103496 -0400
+@@ -1,10 +1,11 @@
+ [general]
+-name=SIGAMON v6.17.11 Gambar, Analisis, dan Monitoring Jaringan
++name=SIGAMON v6.17.12 Gambar, Analisis, dan Monitoring Jaringan
+ qgisMinimumVersion=3.0
+ author=SIGAMON — UP2K Sulawesi Utara
+ email=
+-version=6.17.11
+-changelog=v6.17.11: Sheet Tiang kini memakai konsep tabel panjang yang sama dengan Kabel: satu baris per Lokasi Proyek, klasifikasi/spesifikasi, dan Tahap Data (Rencana Awal, Rencana Akhir, Realisasi). Identitas proyek, target Rencana Akhir, alokasi, deviasi, status, filter, urutan fase, pemisahan TM/TR, dan cakupan seluruh lokasi dipertahankan secara eksplisit. Konstruksi Tiang serta seluruh logika BOQ/kabel/QGIS tidak diubah. Lihat AUDIT_v6.17.11.md.
++version=6.17.12
++changelog=v6.17.12: Menambahkan override Jarak Perhitungan per gawang dan per Tahap Data langsung dari Detail Tarikan. Jarak Geometri tetap terpisah dan tidak berubah; edit/reset hanya menulis field manual_distance, sedangkan KMS, kebutuhan kabel, BOQ, Spreadsheet, dashboard, dan label memakai jarak efektif dari satu helper. Validasi menolak nol, negatif, NaN, infinity, dan teks. Data lama tetap otomatis. Lihat AUDIT_v6.17.12.md.
++    v6.17.11: Sheet Tiang kini memakai konsep tabel panjang yang sama dengan Kabel: satu baris per Lokasi Proyek, klasifikasi/spesifikasi, dan Tahap Data (Rencana Awal, Rencana Akhir, Realisasi). Identitas proyek, target Rencana Akhir, alokasi, deviasi, status, filter, urutan fase, pemisahan TM/TR, dan cakupan seluruh lokasi dipertahankan secara eksplisit. Konstruksi Tiang serta seluruh logika BOQ/kabel/QGIS tidak diubah. Lihat AUDIT_v6.17.11.md.
+     v6.17.10: Hotfix migrasi nama tab Konstruksi Tiang. Google Sheets membandingkan nama tab tanpa membedakan kapitalisasi; SIGAMON kini mengenali KONSTRUKSI TIANG sebagai tab lama, mengganti namanya melalui rename aman berbasis sheetId, membaca ulang metadata, lalu melanjutkan struktur dan penulisan tanpa addSheet duplikat. Lihat AUDIT_v6.17.10.md.
+     v6.17.9: Menambahkan Progress per Lokasi, Progress per UP3, dan Progress per Judul Proyek dari satu sumber master lokasi. Agregasi UP3 memakai kombinasi Judul Proyek plus UP3; agregasi proyek dihitung langsung dari seluruh lokasi agar berbobot benar. Nama sheet KONSTRUKSI TIANG diubah menjadi Konstruksi Tiang dan nama lama dibersihkan saat sync. Struktur final delapan sheet tetap tanpa kolom Desa; BOQ dan logika teknis tidak diubah. Lihat AUDIT_v6.17.9.md.
+     v6.17.8: Google Spreadsheet kembali tepat lima sheet final; tab RINGKASAN KEBUTUHAN, Rencana Awal, Rencana Akhir, dan Realisasi dibersihkan saat sync. Kolom Desa, Desa Asal, dan Desa Tujuan dihapus hanya dari output Spreadsheet; Lokasi Proyek menjadi identitas lokasi output. Data Desa internal QGIS, tiga Tahap, BOQ, kabel, sagging, tambahan konstruksi, CEIL, underbuild, TM/TR, TM-4X, koordinat, dan sync multi-lokasi tidak diubah. Lihat AUDIT_v6.17.8.md.
+--- a/plugin.py	2026-09-10 21:44:16.000000000 -0400
++++ b/plugin.py	2026-09-10 19:07:42.543110807 -0400
+@@ -18,10 +18,14 @@
+ 
+ # Natural sort dipakai di seluruh plugin (ID tiang, master, dropdown filter).
+ # Aturannya hidup di modul bebas QGIS supaya bisa diuji tanpa QGIS.
+-try:
+-    from . import natural_sort as pln_natural_sort
+-except Exception:
+-    import natural_sort as pln_natural_sort
++try:
++    from . import natural_sort as pln_natural_sort
++except Exception:
++    import natural_sort as pln_natural_sort
++try:
++    from . import span_distance as pln_span_distance
++except Exception:
++    import span_distance as pln_span_distance
+ 
+ 
+ def _pln_natural_key(value):
+@@ -413,7 +417,7 @@
+             return None
+ 
+ # Versi plugin untuk ditampilkan kecil pada header panel (informasi saja).
+-PLN_TOOLS_VERSION = "v6.17.11"
++PLN_TOOLS_VERSION = "v6.17.12"
+ DXF_LAST_EXPORT_FOLDER_KEY = "PLNTools/dxf_last_export_folder"
+ PREVIEW_LAST_EXPORT_FOLDER_KEY = "PLNTools/preview_last_export_folder"
+ 
+@@ -914,8 +918,9 @@
+ 
+ # Urutan baku panjang efektif untuk label, dashboard, KPI, panel detail, dan grafik.
+ # Field awal adalah panjang ril/input user; geometry hanya fallback terakhir.
+-LENGTH_FIELD_PRIORITY = [
+-    "panjang_final",
++LENGTH_FIELD_PRIORITY = [
++    "manual_distance",
++    "panjang_final",
+     "panjang_ril",
+     "panjang_3d",
+     "panjang_manual",
+@@ -934,8 +939,9 @@
+ # v6.6.1.462 — BOQ harus menjumlahkan angka jarak yang diketik pengguna,
+ # bukan hasil realisasi geometri/DEMNAS. Pada mode Dynamic Input, nilai asli
+ # disimpan di jarak_target. Field lain hanya fallback untuk data lama/import.
+-BOQ_INPUT_LENGTH_FIELD_PRIORITY = [
+-    "jarak_target",
++BOQ_INPUT_LENGTH_FIELD_PRIORITY = [
++    "manual_distance",
++    "jarak_target",
+     "panjang_input",
+     "jarak_input",
+     "panjang_manual",
+@@ -44048,9 +44054,9 @@
+ class CableSpanDetailDialog(QDialog):
+     """DETAIL TARIKAN KABEL — rincian panjang, sagging, dan kebutuhan kabel.
+ 
+-    Satu baris = satu gawang/tarikan antar dua tiang, bersumber dari feature
+-    JARINGAN existing (§14). Dialog ini READ-ONLY: ia tidak pernah mengubah
+-    geometry, tidak mengubah KMS, dan tidak menyimpan apa pun.
++    Satu baris = satu gawang/tarikan antar dua tiang, bersumber dari feature
++    JARINGAN existing (§14). Edit jarak hanya menulis atribut override;
++    geometry dan koordinat tidak pernah diubah.
+ 
+     PATCH §12 -- breakdown per gawang dipertahankan dan namanya tegas:
+     ``Panjang Geometris`` bukan kebutuhan kabel; ``Kebutuhan Kabel`` adalah
+@@ -44059,10 +44065,10 @@
+ 
+     #: §16 -- Klasifikasi dan Jenis Kabel ikut terbaca per tarikan, sehingga
+     #: total kebutuhan tetap dapat dipisahkan per jenis kabel.
+-    HEADERS = (
+-        "No.", "Klasifikasi", "Jenis Kabel", "Dari Tiang", "Ke Tiang",
+-        "Panjang Geometris (m)", "Sagging (%)", "Tambah Sagging (m)",
+-        "Kebutuhan Kabel (m)", "Status",
++    HEADERS = (
++        "No.", "Klasifikasi", "Jenis Kabel", "Dari Tiang", "Ke Tiang",
++        "Jarak Geometri (m)", "Jarak Perhitungan (m)", "Status Jarak",
++        "Sagging (%)", "Tambah Sagging (m)", "Kebutuhan Kabel (m)", "Status",
+     )
+ 
+     #: Warna aksen tiap klasifikasi. Dipakai ULANG oleh blok ringkasan,
+@@ -44087,7 +44093,9 @@
+     #: melar mengisi sisa lebar. Lebar tetap dipilih dengan sengaja: dengan
+     #: ``resizeColumnsToContents()`` pada setiap render, lebar kolom berubah
+     #: setiap kali filter/pencarian diketik dan angka tampak "meloncat".
+-    COLUMN_WIDTHS = (56, 104, None, 124, 124, 148, 96, 136, 148, 116)
++    COLUMN_WIDTHS = (
++        56, 104, None, 116, 116, 130, 145, 105, 90, 125, 140, 110,
++    )
+ 
+     #: Tinggi baris tabel. Cukup lega untuk dibaca, tetapi tidak boros --
+     #: §F meminta minimal 8-12 baris terlihat pada layar desktop biasa.
+@@ -44290,10 +44298,18 @@
+         self.txt_search.setClearButtonEnabled(True)
+         self.txt_search.setMinimumWidth(240)
+         tools.addWidget(self.txt_search, 1)
+-        self.btn_zoom = QPushButton("◎  Zoom ke Tarikan", tools_row)
+-        self.btn_zoom.setObjectName("BoqGhost")
+-        self.btn_zoom.setEnabled(False)
+-        tools.addWidget(self.btn_zoom, 0)
++        self.btn_zoom = QPushButton("◎  Zoom ke Tarikan", tools_row)
++        self.btn_zoom.setObjectName("BoqGhost")
++        self.btn_zoom.setEnabled(False)
++        tools.addWidget(self.btn_zoom, 0)
++        self.btn_distance = QPushButton("✎  Ubah Jarak", tools_row)
++        self.btn_distance.setObjectName("BoqGhost")
++        self.btn_distance.setEnabled(False)
++        tools.addWidget(self.btn_distance, 0)
++        self.btn_reset_distance = QPushButton("↺  Jarak Geometri", tools_row)
++        self.btn_reset_distance.setObjectName("BoqGhost")
++        self.btn_reset_distance.setEnabled(False)
++        tools.addWidget(self.btn_reset_distance, 0)
+         self.btn_export = QPushButton("⤓  Export Excel", tools_row)
+         tools.addWidget(self.btn_export, 0)
+         root.addWidget(tools_row, 0)
+@@ -44408,9 +44424,15 @@
+             lambda _text="": self._render_table()
+         )
+         self.table.itemSelectionChanged.connect(self._on_row_selected)
+-        self.btn_zoom.clicked.connect(
+-            lambda _checked=False: self._zoom_to_selected()
+-        )
++        self.btn_zoom.clicked.connect(
++            lambda _checked=False: self._zoom_to_selected()
++        )
++        self.btn_distance.clicked.connect(
++            lambda _checked=False: self._edit_selected_distance()
++        )
++        self.btn_reset_distance.clicked.connect(
++            lambda _checked=False: self._reset_selected_distance()
++        )
+         self.btn_export.clicked.connect(
+             lambda _checked=False: self.export_excel()
+         )
+@@ -44870,21 +44892,23 @@
+             table.setRowCount(0)
+             table.setRowCount(len(rows))
+             for index, row in enumerate(rows):
+-                values = (
+-                    str(index + 1),
+-                    row.get("klasifikasi") or "—",
+-                    row.get("tipe_kabel") or pln_boq.UNSPECIFIED_SPEC,
+-                    row.get("dari_tiang") or "—",
+-                    row.get("ke_tiang") or "—",
+-                    pln_boq.format_number(row.get("panjang")),
+-                    pln_boq.format_percent(row.get("sagging")),
+-                    pln_boq.format_number(row.get("tambahan")),
+-                    pln_boq.format_number(row.get("kebutuhan")),
+-                )
+-                for column, value in enumerate(values):
+-                    item = QTableWidgetItem(str(value))
+-                    if column >= 5:
+-                        item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
++                values = (
++                    str(index + 1),
++                    row.get("klasifikasi") or "—",
++                    row.get("tipe_kabel") or pln_boq.UNSPECIFIED_SPEC,
++                    row.get("dari_tiang") or "—",
++                    row.get("ke_tiang") or "—",
++                    pln_boq.format_number(row.get("panjang_geometri")),
++                    pln_boq.format_number(row.get("jarak_perhitungan")),
++                    row.get("status_jarak") or pln_span_distance.DISTANCE_AUTO,
++                    pln_boq.format_percent(row.get("sagging")),
++                    pln_boq.format_number(row.get("tambahan")),
++                    pln_boq.format_number(row.get("kebutuhan")),
++                )
++                for column, value in enumerate(values):
++                    item = QTableWidgetItem(str(value))
++                    if column in (5, 6, 8, 9, 10):
++                        item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                     if column == 0:
+                         item.setData(Qt.UserRole, row.get("key"))
+                     table.setItem(index, column, item)
+@@ -44901,7 +44925,7 @@
+                     pln_boq.SPAN_ABOVE: "kurang",
+                     pln_boq.SPAN_BELOW: "lebih",
+                 }.get(status, "netral")
+-                table.setCellWidget(index, 9, _pln_boq_badge(status, tone))
++                table.setCellWidget(index, 11, _pln_boq_badge(status, tone))
+         finally:
+             try:
+                 table.setUpdatesEnabled(True)
+@@ -44940,9 +44964,13 @@
+             return rows[position]
+         return None
+ 
+-    def _on_row_selected(self):
+-        row = self._selected_row()
+-        self.btn_zoom.setEnabled(row is not None)
++    def _on_row_selected(self):
++        row = self._selected_row()
++        self.btn_zoom.setEnabled(row is not None)
++        self.btn_distance.setEnabled(row is not None)
++        self.btn_reset_distance.setEnabled(bool(
++            row and row.get("status_jarak") == pln_span_distance.DISTANCE_MANUAL
++        ))
+         if row is None:
+             self.lbl_detail.setText("Pilih satu baris tarikan.")
+             return
+@@ -44954,9 +44982,13 @@
+             ),
+             "Dari Tiang : <b>{}</b>".format(row.get("dari_tiang") or "—"),
+             "Ke Tiang : <b>{}</b>".format(row.get("ke_tiang") or "—"),
+-            "Panjang Geometris : <b>{}</b>".format(
+-                pln_boq.format_amount(row.get("panjang"), "m")
+-            ),
++            "Jarak Geometri : <b>{}</b>".format(
++                pln_boq.format_amount(row.get("panjang_geometri"), "m")
++            ),
++            "Jarak Perhitungan : <b>{}</b> ({})".format(
++                pln_boq.format_amount(row.get("jarak_perhitungan"), "m"),
++                row.get("status_jarak") or pln_span_distance.DISTANCE_AUTO,
++            ),
+             "Penghantar : <b>× {:g}</b> = {}".format(
+                 multiplier,
+                 pln_boq.format_amount(row.get("dasar_kabel"), "m"),
+@@ -44976,8 +45008,39 @@
+             )
+         if row.get("keterangan"):
+             parts.append("Keterangan : {}".format(row.get("keterangan")))
+-        self.lbl_detail.setText("&nbsp;&nbsp;•&nbsp;&nbsp;".join(parts))
+-        self._highlight_row(row)
++        self.lbl_detail.setText("&nbsp;&nbsp;•&nbsp;&nbsp;".join(parts))
++        self._highlight_row(row)
++
++    def _edit_selected_distance(self):
++        row = self._selected_row()
++        if row is None:
++            return False
++        current = pln_boq.number(row.get("jarak_perhitungan"))
++        value, accepted = QInputDialog.getDouble(
++            self, "Ubah Jarak Manual", "Masukkan Jarak Perhitungan (m):",
++            current, 0.1, 1000000.0, 1,
++        )
++        if not accepted:
++            return False
++        try:
++            self.plugin.set_span_manual_distance(row, value)
++        except Exception as exc:
++            QMessageBox.warning(self, "Jarak tidak tersimpan", str(exc))
++            return False
++        self._reload_owner()
++        return True
++
++    def _reset_selected_distance(self):
++        row = self._selected_row()
++        if row is None:
++            return False
++        try:
++            self.plugin.set_span_manual_distance(row, None)
++        except Exception as exc:
++            QMessageBox.warning(self, "Jarak tidak direset", str(exc))
++            return False
++        self._reload_owner()
++        return True
+ 
+     # -- integrasi peta --------------------------------------------------
+     def _highlight_row(self, row):
+@@ -45068,18 +45131,21 @@
+         try:
+             with open(path, "w", newline="", encoding="utf-8-sig") as handle:
+                 writer = csv.writer(handle, delimiter=";")
+-                writer.writerow([
+-                    "Klasifikasi", "Jenis Kabel", "Dari Tiang", "Ke Tiang",
+-                    "Panjang Geometris (m)", "Penghantar", "Sagging (%)",
+-                    "Tambahan Sagging (m)", "Kebutuhan Kabel (m)",
+-                ])
++                writer.writerow([
++                    "Klasifikasi", "Jenis Kabel", "Dari Tiang", "Ke Tiang",
++                    "Jarak Geometri (m)", "Jarak Perhitungan (m)",
++                    "Status Jarak", "Penghantar", "Sagging (%)",
++                    "Tambahan Sagging (m)", "Kebutuhan Kabel (m)",
++                ])
+                 for row in rows:
+                     writer.writerow([
+-                        row.get("kelas") or row.get("klasifikasi"),
+-                        row.get("tipe_kabel"),
+-                        row.get("dari_tiang"), row.get("ke_tiang"),
+-                        pln_boq.format_number(row.get("panjang")),
+-                        pln_boq.format_number(row.get("penghantar"), 0),
++                        row.get("kelas") or row.get("klasifikasi"),
++                        row.get("tipe_kabel"),
++                        row.get("dari_tiang"), row.get("ke_tiang"),
++                        pln_boq.format_number(row.get("panjang_geometri")),
++                        pln_boq.format_number(row.get("jarak_perhitungan")),
++                        row.get("status_jarak"),
++                        pln_boq.format_number(row.get("penghantar"), 0),
+                         pln_boq.format_number(row.get("sagging"), 1),
+                         pln_boq.format_number(row.get("tambahan")),
+                         pln_boq.format_number(row.get("kebutuhan")),
+@@ -48522,8 +48588,9 @@
+             QgsField("desa", FIELD_STRING), QgsField("klasifikasi", FIELD_STRING),
+             QgsField("jenis_tiang", FIELD_STRING), QgsField("jenis_jaringan", FIELD_STRING),
+             QgsField("status_data", FIELD_STRING), QgsField("status_underbuild", FIELD_STRING),
+-            QgsField("jaringan_utama", FIELD_STRING), QgsField("jaringan_bawah", FIELD_STRING),
+-            QgsField("panjang_2d", FIELD_DOUBLE), QgsField("panjang_3d", FIELD_DOUBLE),
++            QgsField("jaringan_utama", FIELD_STRING), QgsField("jaringan_bawah", FIELD_STRING),
++            QgsField("panjang_2d", FIELD_DOUBLE), QgsField("panjang_3d", FIELD_DOUBLE),
++            QgsField("manual_distance", FIELD_DOUBLE),
+             QgsField("elevasi_awal", FIELD_DOUBLE), QgsField("elevasi_akhir", FIELD_DOUBLE),
+             QgsField("beda_elevasi", FIELD_DOUBLE),
+             QgsField("metode_jarak", FIELD_STRING), QgsField("mode_jarak", FIELD_STRING),
+@@ -80107,9 +80174,10 @@
+             QgsField("label_panjang", FIELD_STRING),
+             QgsField("jarak_target", FIELD_DOUBLE),
+             QgsField("panjang", FIELD_DOUBLE),
+-            QgsField("panjang_geom", FIELD_DOUBLE),
+-            QgsField("panjang_manual", FIELD_DOUBLE),
+-            QgsField("panjang_final", FIELD_DOUBLE),
++            QgsField("panjang_geom", FIELD_DOUBLE),
++            QgsField("panjang_manual", FIELD_DOUBLE),
++            QgsField("manual_distance", FIELD_DOUBLE),
++            QgsField("panjang_final", FIELD_DOUBLE),
+             # --- v4.1: field bantuan PDF (internal plugin, JANGAN dipakai BOQ/Excel) ---
+             # Diisi otomatis dari panjang ril/3D DEM setiap segmen dibuat, khusus
+             # untuk kebutuhan render/label export PDF. Excel/dashboard/rekap
+@@ -83523,13 +83591,14 @@
+     #: Field yang cukup dibaca untuk membangun daftar tarikan. Sengaja
+     #: minimal: satu tarikan hanya perlu identitas, dua ujung tiangnya, dan
+     #: panjangnya.
+-    STAGE_SPAN_FIELDS = (
++    STAGE_SPAN_FIELDS = (
+         "uid_objek", "feature_uuid", "tahap_data", "status_data",
+         "id_lokasi", "lokasi_proyek", "dari_tiang", "ke_tiang",
+         "id_segmen", "id_jalur", "jenis_jaringan", "jaringan_utama",
+         "jaringan_bawah", "konstruksi_utama", "konstruksi_bawah",
+         "status_underbuild", "catatan_jaringan",
+-    ) + tuple(LENGTH_FIELD_PRIORITY)
++        "panjang_geom", "manual_distance",
++    ) + tuple(LENGTH_FIELD_PRIORITY)
+ 
+     def stage_cable_spans(self, stage, location_id="", location_name=""):
+         """Tarikan/gawang kabel satu tahap, dari JARINGAN existing.
+@@ -83551,16 +83620,23 @@
+             name_as_alternative=True,
+         )
+         spans = []
+-        for values in rows:
+-            length = 0.0
+-            for name in LENGTH_FIELD_PRIORITY:
+-                try:
+-                    candidate = float(values.get(name.casefold()) or 0.0)
++        for values in rows:
++            automatic_length = 0.0
++            for name in LENGTH_FIELD_PRIORITY:
++                if name == "manual_distance":
++                    continue
++                try:
++                    candidate = float(values.get(name.casefold()) or 0.0)
+                 except (TypeError, ValueError):
+                     candidate = 0.0
+-                if candidate > 0:
+-                    length = candidate
+-                    break
++                if candidate > 0:
++                    automatic_length = candidate
++                    break
++            distances = pln_span_distance.resolve_span_distance(
++                values.get("panjang_geom") or automatic_length,
++                values.get("manual_distance"), automatic_length,
++            )
++            length = distances["effective_distance"]
+             if length <= 0:
+                 continue
+             # KLASIFIKASI dan SPESIFIKASI dibaca dari field yang BERBEDA.
+@@ -83581,7 +83657,10 @@
+                 "uid_objek": pln_stage.clean(values.get("uid_objek")),
+                 "dari_tiang": pln_stage.clean(values.get("dari_tiang")),
+                 "ke_tiang": pln_stage.clean(values.get("ke_tiang")),
+-                "panjang": length,
++                "panjang": length,
++                "panjang_geometri": distances["geometry_distance"],
++                "manual_distance": distances["manual_distance"],
++                "status_jarak": distances["distance_source"],
+                 "tipe_kabel": (
+                     pln_stage.clean(values.get("jaringan_utama"))
+                     or pln_stage.clean(values.get("jenis_jaringan"))
+@@ -83665,8 +83744,8 @@
+                 continue
+         return result
+ 
+-    def save_cable_sagging(self, mapping, location_id="", location_name="",
+-                           stage=pln_stage.STAGE_REALISASI):
++    def save_cable_sagging(self, mapping, location_id="", location_name="",
++                           stage=pln_stage.STAGE_REALISASI):
+         """Simpan sagging per tarikan. Hanya menulis ``project_settings``.
+ 
+         TIDAK menyentuh geometri, atribut feature, BOQ, maupun status project
+@@ -86663,6 +86742,7 @@
+         """Status Gardu Cantol satu tiang dari attachment atau relasi stabil."""
+         if point_layer is None or feature is None:
+             return False
++
+         attached = self.get_feature_value_safe(feature, "konstruksi_gardu", "")
+         if pln_construction_display.is_gardu_cantol(attached):
+             return True
+@@ -86687,6 +86767,53 @@
+                    for field in pln_construction_display.GARDU_FIELDS):
+                 return True
+         return False
++
++    def set_span_manual_distance(self, row, value=None):
++        """Simpan/hapus override jarak satu gawang tanpa mengubah geometry."""
++        row = dict(row or {})
++        manual = None
++        if value is not None:
++            manual = pln_span_distance.positive_distance(value)
++            if manual is None:
++                raise ValueError("Jarak manual harus berupa angka lebih dari 0.")
++        layer_name = pln_stage.clean(row.get("layer_name"))
++        layer = self.get_layer(layer_name) if layer_name else None
++        fid = row.get("fid")
++        if layer is None or fid is None:
++            raise ValueError("Feature gawang tidak ditemukan.")
++        feature = self._feature_by_id(layer, int(fid))
++        if feature is None:
++            raise ValueError("Feature gawang tidak ditemukan.")
++        self.ensure_fields(layer, [QgsField("manual_distance", FIELD_DOUBLE)])
++        fields = self._field_names(layer)
++        automatic = 0.0
++        for name in LENGTH_FIELD_PRIORITY:
++            if name == "manual_distance" or name not in fields:
++                continue
++            candidate = self._num_or_none(feature, name)
++            if candidate is not None:
++                automatic = float(candidate)
++                break
++        shown = manual or automatic or self._geometry_length_m(layer, feature)
++        changes = {"manual_distance": manual}
++        for label_field in ("label_panjang", "_pdf_label_panjang"):
++            if label_field not in fields:
++                continue
++            current = str(self.get_feature_value_safe(
++                feature, label_field, ""
++            ) or "").strip().casefold()
++            if current not in ("sembunyikan", "hide", "hidden"):
++                changes[label_field] = "{:.1f} m{}".format(
++                    shown, "*" if manual is not None else ""
++                )
++        # Mutasi atribut saja; geometri tidak disentuh.
++        if not change_attributes_safe(layer, int(fid), changes):
++            raise RuntimeError("Provider menolak penyimpanan jarak manual.")
++        try:
++            layer.triggerRepaint()
++        except Exception:
++            pass
++        return True
+ 
+     def gardu_jenis_from_konstruksi(self, konstruksi):
+         """Jenis gardu diturunkan konsisten dari master data konstruksi."""
+--- a/boq_control.py	2026-09-10 14:29:46.000000000 -0400
++++ b/boq_control.py	2026-09-10 18:59:01.821356757 -0400
+@@ -40,6 +40,11 @@
+ from __future__ import annotations
+ 
+ import math
++
++try:
++    from . import span_distance
++except Exception:
++    import span_distance
+ import re
+ 
+ try:
+@@ -369,7 +374,12 @@
+     seen = set()
+     for span in spans or ():
+         span = dict(span or {})
+-        length = number(span.get("panjang"))
++        distances = span_distance.resolve_span_distance(
++            span.get("panjang_geometri", span.get("panjang")),
++            span.get("manual_distance"),
++            span.get("panjang"),
++        )
++        length = number(distances.get("effective_distance"))
+         if length <= 0:
+             # Tarikan tanpa panjang tidak dapat dihitung kebutuhannya dan
+             # hanya akan menambah baris kosong pada tabel.
+@@ -422,6 +432,10 @@
+             "ke_tiang": clean(span.get("ke_tiang")),
+             "label": span_label(span),
+             "panjang": length,
++            "panjang_geometri": number(distances.get("geometry_distance")),
++            "jarak_perhitungan": length,
++            "manual_distance": distances.get("manual_distance"),
++            "status_jarak": distances.get("distance_source"),
+             "sagging": percent,
+             "sagging_default": percent if stored is None else sagging_percent(stored),
+             "sagging_sutm": sutm_percent,
+--- a/span_distance.py	1969-12-31 19:00:00.000000000 -0500
++++ b/span_distance.py	2026-09-10 18:59:00.797353545 -0400
+@@ -0,0 +1,47 @@
++"""Satu sumber aturan jarak gawang SIGAMON, bebas QGIS.
++
++Override jarak adalah angka perhitungan, bukan perintah mengubah geometri.
++Modul ini sengaja tidak mengimpor QGIS dan tidak memiliki fungsi mutasi.
++"""
++
++import math
++
++
++DISTANCE_AUTO = "Otomatis"
++DISTANCE_MANUAL = "Manual"
++
++
++def positive_distance(value):
++    """Kembalikan float finite > 0, selain itu ``None``."""
++    try:
++        if value is None or isinstance(value, bool):
++            return None
++        if isinstance(value, str):
++            value = value.strip().replace(",", ".")
++            if not value:
++                return None
++        number = float(value)
++    except (TypeError, ValueError, OverflowError):
++        return None
++    return number if math.isfinite(number) and number > 0 else None
++
++
++def resolve_span_distance(geometry_distance, manual_distance=None,
++                          automatic_distance=None):
++    """Pisahkan jarak geometri, jarak perhitungan, dan sumbernya.
++
++    ``automatic_distance`` menampung panjang existing SIGAMON (misalnya hasil
++    ukur DEM/3D). Jika tidak diberikan, jarak geometri menjadi nilai otomatis.
++    Manual yang tidak valid tidak pernah mengalahkan nilai otomatis.
++    """
++    geometry = positive_distance(geometry_distance)
++    automatic = positive_distance(automatic_distance) or geometry
++    manual = positive_distance(manual_distance)
++    effective = manual or automatic
++    return {
++        "geometry_distance": geometry or 0.0,
++        "manual_distance": manual,
++        "effective_distance": effective or 0.0,
++        "distance_source": DISTANCE_MANUAL if manual is not None else DISTANCE_AUTO,
++    }
++
+--- a/project_package.py	2026-09-09 09:09:30.000000000 -0400
++++ b/project_package.py	2026-09-10 18:59:02.761359710 -0400
+@@ -532,8 +532,9 @@
+     ("fungsi_konstruksi", "s"), ("kategori_simbol", "s"),
+     ("status_slo", "s"), ("status_underbuild", "s"),
+     ("jaringan_utama", "s"), ("jaringan_bawah", "s"), ("label_panjang", "s"),
+-    ("jarak_target", "d"), ("panjang", "d"), ("panjang_geom", "d"),
+-    ("panjang_manual", "d"), ("panjang_final", "d"),
++    ("jarak_target", "d"), ("panjang", "d"), ("panjang_geom", "d"),
++    ("panjang_manual", "d"), ("manual_distance", "d"),
++    ("panjang_final", "d"),
+     ("_pdf_panjang_2d", "d"), ("_pdf_label_panjang", "s"),
+     ("_pdf_ready", "i"), ("_pdf_source", "s"), ("_pdf_geom_mode", "s"),
+     ("elevasi_awal", "d"), ("elevasi_akhir", "d"), ("beda_elevasi", "d"),
+--- a/export_excel_dashboard.py	2026-09-09 09:28:54.000000000 -0400
++++ b/export_excel_dashboard.py	2026-09-10 19:06:57.962917337 -0400
+@@ -136,7 +136,7 @@
+     "jenis_jaringan": ["jenis_jaringan", "jaringan", "tipe_jaringan"],
+     # Panjang harus mengikuti nilai hasil input/dashboard terlebih dahulu.
+     # Geometry hanya fallback terakhir di fungsi effective_length_m().
+-    "panjang": ["panjang_final", "panjang_ril", "panjang_3d", "panjang_manual", "jarak_ril", "panjang_input", "panjang", "panjang_m", "jarak_target", "jarak_dari_sebelum", "length", "shape_length"],
++    "panjang": ["manual_distance", "panjang_final", "panjang_ril", "panjang_3d", "panjang_manual", "jarak_ril", "panjang_input", "panjang", "panjang_m", "jarak_target", "jarak_dari_sebelum", "length", "shape_length"],
+     "id_tiang": ["id_tiang", "id", "kode_tiang", "nomor_tiang"],
+     "id_gardu": ["id_gardu", "nama_gardu", "kode_gardu", "id"],
+     "elevasi": ["elevasi_dem", "elevasi", "elevation", "elev", "z", "ketinggian", "altitude"],
+@@ -1273,7 +1273,7 @@
+     pemanggil tetapi tidak lagi dipakai (Dashboard tidak memakai ellipsoidal).
+     """
+     priority = [
+-        "panjang_final", "panjang_ril", "panjang_3d", "panjang_manual",
++        "manual_distance", "panjang_final", "panjang_ril", "panjang_3d", "panjang_manual",
+         "jarak_ril", "panjang_input", "panjang", "panjang_m",
+     ]
+     seen = set()
+@@ -1299,7 +1299,8 @@
+ 
+ 
+ BOQ_INPUT_LENGTH_PRIORITY = (
+-    "jarak_target", "panjang_input", "jarak_input", "panjang_manual",
++    "manual_distance", "jarak_target", "panjang_input", "jarak_input",
++    "panjang_manual",
+ )
+ 
+ 
+--- a/export_pdf_layout.py	2026-09-09 09:09:30.000000000 -0400
++++ b/export_pdf_layout.py	2026-09-10 19:02:49.978109664 -0400
+@@ -108,7 +108,7 @@
+         _dash_geom_signature = None
+ 
+ _LENGTH_FIELD_PRIORITY = (
+-    "panjang_final", "panjang_ril", "panjang_3d", "panjang_manual",
++    "manual_distance", "panjang_final", "panjang_ril", "panjang_3d", "panjang_manual",
+     "jarak_ril", "panjang_input", "panjang", "panjang_m",
+ )
+ 
+--- a/tests/test_span_distance.py	1969-12-31 19:00:00.000000000 -0500
++++ b/tests/test_span_distance.py	2026-09-10 19:03:30.614242921 -0400
+@@ -0,0 +1,103 @@
++import math
++import unittest
++
++import boq_control as bc
++import span_distance as distance
++
++
++class SpanDistanceCoreTests(unittest.TestCase):
++    def test_default_uses_geometry(self):
++        row = distance.resolve_span_distance(47.6)
++        self.assertEqual(47.6, row["effective_distance"])
++        self.assertEqual("Otomatis", row["distance_source"])
++
++    def test_manual_overrides_without_changing_geometry(self):
++        row = distance.resolve_span_distance(47.6, 50.0)
++        self.assertEqual(47.6, row["geometry_distance"])
++        self.assertEqual(50.0, row["effective_distance"])
++        self.assertEqual("Manual", row["distance_source"])
++
++    def test_reset_is_the_same_as_no_manual_value(self):
++        self.assertEqual(
++            distance.resolve_span_distance(47.6),
++            distance.resolve_span_distance(47.6, None),
++        )
++
++    def test_invalid_manual_values_never_override(self):
++        for value in (0, -1, "", "abc", math.nan, math.inf, -math.inf):
++            with self.subTest(value=value):
++                row = distance.resolve_span_distance(47.6, value)
++                self.assertEqual(47.6, row["effective_distance"])
++                self.assertEqual("Otomatis", row["distance_source"])
++
++    def test_legacy_automatic_distance_is_preserved(self):
++        row = distance.resolve_span_distance(47.6, None, 48.2)
++        self.assertEqual(47.6, row["geometry_distance"])
++        self.assertEqual(48.2, row["effective_distance"])
++
++
++class CableCalculationTests(unittest.TestCase):
++    def test_manual_distance_drives_sutr_need(self):
++        rows = bc.build_span_rows([{
++            "feature_uuid": "span-1", "dari_tiang": "TR-001",
++            "ke_tiang": "TR-002", "panjang": 47.6,
++            "panjang_geometri": 47.6, "manual_distance": 50.0,
++            "has_tr": True,
++        }])
++        self.assertEqual(47.6, rows[0]["panjang_geometri"])
++        self.assertEqual(50.0, rows[0]["jarak_perhitungan"])
++        self.assertEqual("Manual", rows[0]["status_jarak"])
++        self.assertAlmostEqual(51.5, rows[0]["kebutuhan"])
++
++    def test_manual_distance_drives_three_phase_sutm_need(self):
++        rows = bc.build_span_rows([{
++            "feature_uuid": "span-2", "panjang": 47.6,
++            "panjang_geometri": 47.6, "manual_distance": 50.0,
++            "has_tm": True,
++        }])
++        self.assertEqual(150.0, rows[0]["dasar_kabel"])
++        self.assertAlmostEqual(153.75, rows[0]["kebutuhan"])
++
++    def test_overrides_are_independent_per_span_and_stage_input(self):
++        awal = bc.build_span_rows([{
++            "feature_uuid": "awal", "panjang": 47.6, "manual_distance": None,
++            "has_tr": True,
++        }])[0]
++        akhir = bc.build_span_rows([{
++            "feature_uuid": "akhir", "panjang": 47.6, "manual_distance": 50,
++            "has_tr": True,
++        }])[0]
++        real = bc.build_span_rows([{
++            "feature_uuid": "real", "panjang": 48.2, "manual_distance": 49.5,
++            "has_tr": True,
++        }])[0]
++        self.assertEqual([47.6, 50.0, 49.5], [
++            awal["jarak_perhitungan"], akhir["jarak_perhitungan"],
++            real["jarak_perhitungan"],
++        ])
++
++
++class SourceContractTests(unittest.TestCase):
++    @classmethod
++    def setUpClass(cls):
++        with open("plugin.py", encoding="utf-8") as handle:
++            cls.source = handle.read()
++
++    def test_manual_edit_is_attribute_only(self):
++        start = self.source.index("    def set_span_manual_distance")
++        end = self.source.index("\n    def ", start + 10)
++        body = self.source[start:end]
++        self.assertIn("change_attributes_safe", body)
++        for forbidden in (
++            "changeGeometry", "moveFeature", "moveVertex", "translate(",
++            "change_geometry_safe", "setGeometry",
++        ):
++            self.assertNotIn(forbidden, body)
++
++    def test_detail_has_edit_and_reset_actions(self):
++        self.assertIn('"✎  Ubah Jarak"', self.source)
++        self.assertIn('"↺  Jarak Geometri"', self.source)
++
++
++if __name__ == "__main__":
++    unittest.main()
+--- a/AUDIT_v6.17.12.md	1969-12-31 19:00:00.000000000 -0500
++++ b/AUDIT_v6.17.12.md	2026-09-10 19:07:44.855120054 -0400
+@@ -0,0 +1,27 @@
++# Audit SIGAMON v6.17.12
++
++## Hasil implementasi
++
++- `span_distance.py` menjadi satu sumber aturan: manual finite dan lebih dari
++  nol mengalahkan panjang otomatis; selain itu panjang existing/geometri tetap
++  dipakai.
++- Field baru `manual_distance` menyimpan override per feature gawang. Karena
++  feature jaringan sudah membawa lokasi dan Tahap Data, nilai Rencana Awal,
++  Rencana Akhir, dan Realisasi tidak saling menimpa.
++- Detail Tarikan menampilkan Jarak Geometri, Jarak Perhitungan, dan Status
++  Jarak serta menyediakan aksi Ubah Jarak dan Kembalikan ke Jarak Geometri.
++- Penyimpanan hanya memakai perubahan atribut. Tidak ada operasi perpindahan
++  vertex, titik, garis, gardu, koordinat, atau geometry.
++- KMS, kebutuhan kabel per gawang, sagging, BOQ, dashboard/rekap, Spreadsheet,
++  label peta, dan Preview/PDF memakai jarak perhitungan yang sama.
++- Label manual diberi tanda `*`; reset memulihkan nilai otomatis.
++- Export DXF tidak menerima target geometry dari field override baru, sehingga
++  garis tetap mengikuti bentuk dan koordinat QGIS.
++
++## Kompatibilitas
++
++Project lama tidak memerlukan migrasi manual. Jika `manual_distance` kosong
++atau belum ada, urutan field panjang existing dan fallback geometri tetap
++berfungsi seperti versi sebelumnya. Formula SUTM tiga fasa, sagging SUTM/SUTR,
++tambahan konstruksi, CEIL kebutuhan final, serta seluruh logika tiang tidak
++diubah.
+--- a/TEST_MATRIX_v6.17.12.md	1969-12-31 19:00:00.000000000 -0500
++++ b/TEST_MATRIX_v6.17.12.md	2026-09-10 19:07:45.619122836 -0400
+@@ -0,0 +1,16 @@
++# Test Matrix SIGAMON v6.17.12
++
++| Skenario | Hasil wajib |
++|---|---|
++| Default | Geometri 47,6 → perhitungan 47,6; Otomatis |
++| Manual | Geometri 47,6 + manual 50,0 → perhitungan 50,0; Manual |
++| Reset | Manual kosong → kembali ke panjang otomatis/geometri |
++| Validasi | Nol, negatif, kosong, teks, NaN, dan infinity ditolak |
++| Geometry | Edit/reset hanya mengubah atribut; koordinat dan garis tetap |
++| Tahap Data | Override Awal, Akhir, dan Realisasi independen |
++| KMS/BOQ | Panjang dasar memakai jarak perhitungan |
++| Kabel | Formula SUTM/SUTR dan sagging memakai jarak efektif |
++| Spreadsheet | Kontrol Kabel menerima hasil BOQ/KMS yang sama |
++| Label/Preview | Teks memakai jarak efektif; manual bertanda `*` |
++| DXF | Geometry tidak diregangkan oleh override baru |
++| Legacy | Tanpa field manual tetap memakai perilaku existing |
