@@ -4,24 +4,13 @@ Sistem Informasi Gambar, Analisis, dan Monitoring Jaringan Kelistrikan untuk QGI
 
 ## Rilis terbaru
 
-**v6.17.9 — Monitoring Progress Google Spreadsheet**
+**v6.17.10 — Hotfix Migrasi Nama Sheet**
 
-Struktur final:
+- Memperbaiki HTTP 400 ketika workbook masih memiliki tab `KONSTRUKSI TIANG`.
+- Tab lama dikenali tanpa membedakan kapitalisasi dan diubah aman menjadi `Konstruksi Tiang` memakai sheetId yang sama.
+- SIGAMON tidak lagi mencoba membuat tab duplikat melalui `addSheet`.
+- Struktur delapan sheet progress v6.17.9 tetap dipertahankan.
+- Regression suite: 3.403 test lulus, 6 dilewati, 0 gagal.
 
-1. Kabel
-2. Tiang
-3. Konstruksi Tiang
-4. Pindah Lokasi
-5. Titik Koordinat
-6. Progress per Lokasi
-7. Progress per UP3
-8. Progress per Judul Proyek
-
-- Progress UP3 adalah rata-rata seluruh Lokasi Proyek pada kombinasi Judul Proyek + UP3.
-- Progress Judul Proyek dihitung langsung dari seluruh lokasi sehingga berbobot menurut jumlah lokasi.
-- Kolom Desa tidak diekspor, tetapi data Desa internal QGIS tetap dipertahankan.
-- Tab obsolete dan nama lama `KONSTRUKSI TIANG` dibersihkan setelah kedelapan tab tersedia.
-- Regression suite: 3.401 test lulus, 6 dilewati, 0 gagal.
-
-Paket instalasi: `SIGAMON_v6.17.9.zip`.
-Patch sumber: [releases/SIGAMON_v6.17.9.patch](releases/SIGAMON_v6.17.9.patch).
+Paket instalasi: `SIGAMON_v6.17.10.zip`.
+Patch sumber: [releases/SIGAMON_v6.17.10.patch](releases/SIGAMON_v6.17.10.patch).
