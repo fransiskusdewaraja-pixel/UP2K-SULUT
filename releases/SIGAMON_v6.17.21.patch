@@ -1,6 +1,6 @@
-diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/AUDIT_v6.17.21.md /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/AUDIT_v6.17.21.md
---- /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/AUDIT_v6.17.21.md	1970-01-01 08:00:00.000000000 +0800
-+++ /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/AUDIT_v6.17.21.md	2026-09-12 07:13:21.306203997 +0800
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' a/AUDIT_v6.17.21.md b/AUDIT_v6.17.21.md
+--- a/AUDIT_v6.17.21.md	1970-01-01 08:00:00.000000000 +0800
++++ b/AUDIT_v6.17.21.md	2026-09-12 07:13:21.306203997 +0800
 @@ -0,0 +1,43 @@
 +# Audit SIGAMON v6.17.21
 +
@@ -45,18 +45,18 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gamb
 +
 +- Test fokus underbuild/topologi/konstruksi/DXF: 131 lulus, 0 gagal.
 +- Regression penuh: 3.474 lulus, 6 dilewati, 0 gagal.
-diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/CLAUDE.md /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/CLAUDE.md
---- /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/CLAUDE.md	2026-09-12 06:41:22.000000000 +0800
-+++ /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/CLAUDE.md	2026-09-12 07:13:19.650208301 +0800
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' a/CLAUDE.md b/CLAUDE.md
+--- a/CLAUDE.md	2026-09-12 06:41:22.000000000 +0800
++++ b/CLAUDE.md	2026-09-12 07:13:19.650208301 +0800
 @@ -1,4 +1,4 @@
 -# SIGAMON v6.17.20
 +# SIGAMON v6.17.21
  
  Workspace pengembangan plugin QGIS SIGAMON. Judul Proyek adalah batas data
  tertinggi: dua Judul Proyek tetap dua dataset walaupun desa, nama Lokasi
-diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/README.txt /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/README.txt
---- /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/README.txt	2026-09-12 06:41:20.000000000 +0800
-+++ /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/README.txt	2026-09-12 07:13:18.826210450 +0800
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' a/README.txt b/README.txt
+--- a/README.txt	2026-09-12 06:41:20.000000000 +0800
++++ b/README.txt	2026-09-12 07:13:18.826210450 +0800
 @@ -1,4 +1,7 @@
 -SIGAMON v6.17.20
 +SIGAMON v6.17.21
@@ -66,9 +66,9 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gamb
  Lihat AUDIT_v6.17.20.md untuk penambahan underbuild langsung pada JTM
  Eksisting tanpa menggandakan JTM/TM-4X dan dengan Jarak (m) input yang sama.
  Lihat AUDIT_v6.17.19.md untuk deduplikasi TM-4X per tiang fisik dan
-diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/TEST_MATRIX_v6.17.21.md /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/TEST_MATRIX_v6.17.21.md
---- /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/TEST_MATRIX_v6.17.21.md	1970-01-01 08:00:00.000000000 +0800
-+++ /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/TEST_MATRIX_v6.17.21.md	2026-09-12 07:13:22.102201927 +0800
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' a/TEST_MATRIX_v6.17.21.md b/TEST_MATRIX_v6.17.21.md
+--- a/TEST_MATRIX_v6.17.21.md	1970-01-01 08:00:00.000000000 +0800
++++ b/TEST_MATRIX_v6.17.21.md	2026-09-12 07:13:22.102201927 +0800
 @@ -0,0 +1,16 @@
 +# Test Matrix SIGAMON v6.17.21
 +
@@ -86,9 +86,9 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gamb
 +| Jarak (m) utama dan underbuild | Tetap satu nilai input | Lulus |
 +| Rencana Awal/Akhir/Realisasi | Tetap terisolasi per tahap | Lulus |
 +| Regression penuh | 3.474 lulus, 6 dilewati, 0 gagal | Lulus |
-diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/metadata.txt /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/metadata.txt
---- /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/metadata.txt	2026-09-12 06:41:18.000000000 +0800
-+++ /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/metadata.txt	2026-09-12 07:13:17.966212685 +0800
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' a/metadata.txt b/metadata.txt
+--- a/metadata.txt	2026-09-12 06:41:18.000000000 +0800
++++ b/metadata.txt	2026-09-12 07:13:17.966212685 +0800
 @@ -1,10 +1,11 @@
  [general]
 -name=SIGAMON v6.17.20 Gambar, Analisis, dan Monitoring Jaringan
@@ -104,9 +104,9 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gamb
      v6.17.19: Memperbaiki BOQ tiang eksisting secara topologis. TM-4X kini dideduplikasi satu kali per tiang fisik, tahap, dan Lokasi Proyek walaupun beberapa edge menempel. TR-3 underbuild pada tiang eksisting dihitung dari terminasi route aktif: satu route berakhir = satu TR-3, route tembus = nol, dan dua route berakhir = dua. UUID endpoint tetap utama dan ID legacy tidak boleh menyeberang lokasi. Lihat AUDIT_v6.17.19.md.
      v6.17.17: Tambah/Hapus Underbuild kini memperlakukan TIANG_EKSISTING sebagai node topologi bersama pada Rencana Awal, Rencana Akhir, dan Realisasi. Pemilihan serta penulisan konstruksi memakai scope Judul Proyek/Lokasi Proyek dan endpoint UUID-first; ID hanya fallback data lama. TM-4X utama dan TR-3 bawah dapat tersimpan bersama pada satu tiang eksisting dalam transaksi yang sama, termasuk terminasi ganda. Tiang eksisting tidak disalin ke layer tahap. Jarak (m) manual tetap satu sumber untuk gawang utama/underbuild. Lihat AUDIT_v6.17.17.md.
      v6.17.16: Renderer JARINGAN_EKSISTING kini mengikuti warna tipe yang sama dengan Realisasi: JTM/SUTM merah solid, JTR/SUTR biru solid, dan underbuild merah-biru solid sejajar. Renderer tunggal ungu dihapus. Perubahan hanya pada penyajian; geometri, panjang, konstruksi, label, BOQ, dan data jaringan tidak berubah.
-diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/plugin.py /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/plugin.py
---- /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/plugin.py	2026-09-12 06:41:20.000000000 +0800
-+++ /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/plugin.py	2026-09-12 07:13:17.110214911 +0800
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' a/plugin.py b/plugin.py
+--- a/plugin.py	2026-09-12 06:41:20.000000000 +0800
++++ b/plugin.py	2026-09-12 07:13:17.110214911 +0800
 @@ -417,7 +417,7 @@
              return None
  
@@ -564,9 +564,9 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gamb
               self.underbuild_line_symbol(width=width, dashed=dashed)),
              ("JTM Biasa ({})".format(suffix),
               "NOT " + under_expr + " AND " + jtm_expr,
-diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/tests/test_existing_underbuild_nodes.py /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/tests/test_existing_underbuild_nodes.py
---- /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/tests/test_existing_underbuild_nodes.py	2026-09-12 06:32:04.000000000 +0800
-+++ /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/tests/test_existing_underbuild_nodes.py	2026-09-12 07:04:47.432275381 +0800
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' a/tests/test_existing_underbuild_nodes.py b/tests/test_existing_underbuild_nodes.py
+--- a/tests/test_existing_underbuild_nodes.py	2026-09-12 06:32:04.000000000 +0800
++++ b/tests/test_existing_underbuild_nodes.py	2026-09-12 07:04:47.432275381 +0800
 @@ -108,6 +108,17 @@
          )
          self.assertIn("_pln_network_length_segment_flags", source)
@@ -621,9 +621,9 @@ diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gamb
  
  
  if __name__ == "__main__":
-diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/underbuild_termination.py /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/underbuild_termination.py
---- /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/underbuild_termination.py	2026-09-11 13:25:52.000000000 +0800
-+++ /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/underbuild_termination.py	2026-09-12 07:13:20.510206069 +0800
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' a/underbuild_termination.py b/underbuild_termination.py
+--- a/underbuild_termination.py	2026-09-11 13:25:52.000000000 +0800
++++ b/underbuild_termination.py	2026-09-12 07:13:20.510206069 +0800
 @@ -70,10 +70,11 @@
          strict_existing=False, is_gardu=False):
      """Kode konstruksi pada endpoint sumber lintas layer/status.
