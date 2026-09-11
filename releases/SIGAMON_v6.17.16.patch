@@ -1,0 +1,289 @@
+--- a/plugin.py
++++ b/plugin.py
+@@ -417,7 +417,7 @@
+             return None
+ 
+ # Versi plugin untuk ditampilkan kecil pada header panel (informasi saja).
+-PLN_TOOLS_VERSION = "v6.17.15"
++PLN_TOOLS_VERSION = "v6.17.16"
+ DXF_LAST_EXPORT_FOLDER_KEY = "PLNTools/dxf_last_export_folder"
+ PREVIEW_LAST_EXPORT_FOLDER_KEY = "PLNTools/preview_last_export_folder"
+ 
+@@ -28338,8 +28338,14 @@
+             if gt == QgsWkbTypes.LineGeometry:
+                 if "AKTUAL" in name:
+                     color = "#2563eb"; width = "1.10"; style = "solid"
+-                elif "EKSISTING" in name:
+-                    color = "#7e22ce"; width = "1.10"; style = "solid"
++                elif "EKSISTING" in name:
++                    # Fallback Dashboard tetap mempertahankan pemisahan tipe
++                    # seperti canvas utama: JTM merah dan JTR biru, keduanya
++                    # solid untuk jaringan Eksisting.
++                    self.plugin._apply_jaringan_type_style(
++                        tmp, dashed=False, suffix="Eksisting", width=1.10
++                    )
++                    return
+                 else:
+                     color = "#2563eb"; width = "1.10"; style = "dash"
+                 sym = QgsLineSymbol.createSimple({"color": color, "width": width, "line_style": style, "capstyle": "round", "joinstyle": "round"})
+@@ -80502,7 +80508,7 @@
+             "- Mode jarak bisa Tanpa DEM (2D/datar), Dengan DEM (3D/ril), atau Otomatis\n"
+             "- Field koreksi manual label PDF: pdf_label_sisi, pdf_label_dx_mm, pdf_label_dy_mm\n"
+             "- Foto dokumentasi: 9 slot baku hanya untuk TIANG_AKTUAL dan GARDU_AKTUAL agar tidak double dengan Rencana\n"
+-            "- Layer JARINGAN_EKSISTING: garis solid ungu untuk aset jaringan eksisting"
++            "- Layer JARINGAN_EKSISTING: JTM merah dan JTR biru solid seperti Realisasi"
+         )
+ 
+     def _apply_styles_silent(
+@@ -81209,14 +81215,60 @@
+         layer.setRenderer(QgsRuleBasedRenderer(root_rule))
+         layer.triggerRepaint()
+ 
+-    def apply_jaringan_eksisting_style(self, layer):
+-        # Jaringan eksisting mengikuti konsep aset eksisting: solid dan sederhana.
+-        # Warna ungu dipakai agar berbeda dari SUTM merah dan SUTR biru.
+-        symbol = self.line_symbol("150,0,200", width=0.38, dashed=False)
+-        layer.setRenderer(QgsSingleSymbolRenderer(symbol))
+-        layer.triggerRepaint()
+-
+-    def apply_jaringan_style(self, layer):
++    def apply_jaringan_eksisting_style(self, layer):
++        """Jaringan Eksisting memakai warna tipe yang sama dengan Realisasi.
++
++        Perbedaannya terhadap Rencana hanya pola garis: Eksisting selalu solid.
++        JTM/SUTM merah, JTR/SUTR biru, dan underbuild menampilkan keduanya
++        sejajar tanpa mengubah feature maupun topologi.
++        """
++        self._apply_jaringan_type_style(
++            layer, dashed=False, suffix="Eksisting", width=0.38
++        )
++
++    def _apply_jaringan_type_style(self, layer, dashed, suffix, width):
++        """Pasang renderer JTM merah/JTR biru untuk satu status jaringan."""
++        root_rule = QgsRuleBasedRenderer.Rule(None)
++        # Underbuild disimpan sebagai satu feature fisik: JTM pada jaringan
++        # utama dan JTR pada jaringan bawah. Renderer komposit membuat kedua
++        # penghantar terlihat tanpa menggandakan feature/panjang/topologi.
++        under_expr = (
++            "(upper(trim(coalesce(\"status_underbuild\",''))) IN "
++            "('YA','YES','1','TRUE','AKTIF','UNDERBUILD') OR "
++            "upper(coalesce(\"jaringan_bawah\",'')) LIKE '%JTR%' OR "
++            "upper(coalesce(\"tipe_jaringan\",'')) LIKE '%UNDERBUILD%')"
++        )
++        jtm_expr = (
++            "(upper(coalesce(\"jenis_jaringan\",'')) LIKE '%JTM%' OR "
++            "upper(coalesce(\"jaringan_utama\",'')) LIKE '%JTM%')"
++        )
++        jtr_expr = (
++            "(upper(coalesce(\"jenis_jaringan\",'')) LIKE '%JTR%' OR "
++            "upper(coalesce(\"jaringan_utama\",'')) LIKE '%JTR%')"
++        )
++        rules = [
++            ("JTM + JTR Underbuild ({})".format(suffix), under_expr,
++             self.underbuild_line_symbol(width=width, dashed=dashed)),
++            ("JTM Biasa ({})".format(suffix),
++             "NOT " + under_expr + " AND " + jtm_expr,
++             self.line_symbol(
++                 "220,0,0", width=width, offset=0.0, dashed=dashed
++             )),
++            ("JTR Biasa ({})".format(suffix),
++             "NOT " + under_expr + " AND " + jtr_expr,
++             self.line_symbol(
++                 "0,80,220", width=width, offset=0.0, dashed=dashed
++             )),
++        ]
++        for label, expr, symbol in rules:
++            rule = QgsRuleBasedRenderer.Rule(symbol)
++            rule.setLabel(label)
++            rule.setFilterExpression(expr)
++            root_rule.appendChild(rule)
++        layer.setRenderer(QgsRuleBasedRenderer(root_rule))
++        layer.triggerRepaint()
++
++    def apply_jaringan_style(self, layer):
+         layer_name = layer.name().upper() if layer and hasattr(layer, "name") else ""
+         if "EKSISTING" in layer_name:
+             self.apply_jaringan_eksisting_style(layer)
+@@ -81227,39 +81279,9 @@
+         # v6.6.1.3: rencana dibuat sedikit lebih tebal agar dash benar-benar terlihat,
+         # sementara aktual tetap solid biru sesuai style layer.
+         width = 0.55 if dashed else 0.38
+-        root_rule = QgsRuleBasedRenderer.Rule(None)
+-        # Underbuild disimpan sebagai satu feature fisik: JTM pada jaringan utama
+-        # dan JTR pada jaringan bawah. Satu simbol komposit memastikan kedua
+-        # penghantar terlihat tanpa menggandakan feature, panjang, atau topologi.
+-        under_expr = (
+-            "(upper(trim(coalesce(\"status_underbuild\",''))) IN "
+-            "('YA','YES','1','TRUE','AKTIF','UNDERBUILD') OR "
+-            "upper(coalesce(\"jaringan_bawah\",'')) LIKE '%JTR%' OR "
+-            "upper(coalesce(\"tipe_jaringan\",'')) LIKE '%UNDERBUILD%')"
+-        )
+-        jtm_expr = (
+-            "(upper(coalesce(\"jenis_jaringan\",'')) LIKE '%JTM%' OR "
+-            "upper(coalesce(\"jaringan_utama\",'')) LIKE '%JTM%')"
+-        )
+-        jtr_expr = (
+-            "(upper(coalesce(\"jenis_jaringan\",'')) LIKE '%JTR%' OR "
+-            "upper(coalesce(\"jaringan_utama\",'')) LIKE '%JTR%')"
+-        )
+-        rules = [
+-            (f"JTM + JTR Underbuild ({suffix})", under_expr,
+-             self.underbuild_line_symbol(width=width, dashed=dashed)),
+-            (f"JTM Biasa ({suffix})", "NOT " + under_expr + " AND " + jtm_expr,
+-             self.line_symbol("220,0,0", width=width, offset=0.0, dashed=dashed)),
+-            (f"JTR Biasa ({suffix})", "NOT " + under_expr + " AND " + jtr_expr,
+-             self.line_symbol("0,80,220", width=width, offset=0.0, dashed=dashed)),
+-        ]
+-        for label, expr, symbol in rules:
+-            rule = QgsRuleBasedRenderer.Rule(symbol)
+-            rule.setLabel(label)
+-            rule.setFilterExpression(expr)
+-            root_rule.appendChild(rule)
+-        layer.setRenderer(QgsRuleBasedRenderer(root_rule))
+-        layer.triggerRepaint()
++        self._apply_jaringan_type_style(
++            layer, dashed=dashed, suffix=suffix, width=width
++        )
+ 
+     def selected_dem_layer(self):
+         """Ambil raster DEM yang dipilih pada form. DEM hanya dipakai saat mode 3D/ril aktif."""
+--- /dev/null
++++ b/tests/test_existing_network_style.py
+@@ -0,0 +1,60 @@
++# -*- coding: utf-8 -*-
++"""Kontrak warna jaringan Eksisting: JTM merah, JTR biru, semuanya solid."""
++import ast
++import unittest
++
++import _bootstrap
++
++from test_location_ui_contract import method_source
++
++
++class ExistingNetworkStyleTests(unittest.TestCase):
++
++    @classmethod
++    def setUpClass(cls):
++        cls.source = _bootstrap.read_module("plugin.py")
++
++    def test_existing_uses_the_shared_type_renderer(self):
++        body = method_source(self.source, "apply_jaringan_eksisting_style")
++        self.assertIn("self._apply_jaringan_type_style(", body)
++        self.assertIn("dashed=False", body)
++        self.assertIn('suffix="Eksisting"', body)
++        self.assertIn("width=0.38", body)
++
++    def test_jtm_is_red_and_jtr_is_blue(self):
++        body = method_source(self.source, "_apply_jaringan_type_style")
++        self.assertIn('"220,0,0"', body)
++        self.assertIn('"0,80,220"', body)
++        self.assertIn("jtm_expr", body)
++        self.assertIn("jtr_expr", body)
++
++    def test_underbuild_uses_both_type_colours_with_the_same_line_pattern(self):
++        body = method_source(self.source, "_apply_jaringan_type_style")
++        self.assertIn(
++            "self.underbuild_line_symbol(width=width, dashed=dashed)", body
++        )
++
++    def test_existing_is_no_longer_a_single_purple_symbol(self):
++        body = method_source(self.source, "apply_jaringan_eksisting_style")
++        self.assertNotIn("150,0,200", body)
++        self.assertNotIn("QgsSingleSymbolRenderer", body)
++
++    def test_actual_and_existing_share_the_same_renderer(self):
++        actual = method_source(self.source, "apply_jaringan_style")
++        existing = method_source(self.source, "apply_jaringan_eksisting_style")
++        self.assertIn("self._apply_jaringan_type_style(", actual)
++        self.assertIn("self._apply_jaringan_type_style(", existing)
++
++    def test_dashboard_existing_fallback_is_also_solid_and_type_coloured(self):
++        body = method_source(self.source, "_apply_dashboard_temp_style")
++        existing = body.index('elif "EKSISTING" in name:')
++        fallback = body.index("self.plugin._apply_jaringan_type_style", existing)
++        self.assertIn("dashed=False", body[fallback:fallback + 180])
++        self.assertIn('suffix="Eksisting"', body[fallback:fallback + 180])
++
++    def test_plugin_still_parses(self):
++        ast.parse(self.source, filename=_bootstrap.module_path("plugin.py"))
++
++
++if __name__ == "__main__":
++    unittest.main()
+--- a/metadata.txt
++++ b/metadata.txt
+@@ -1,10 +1,11 @@
+ [general]
+-name=SIGAMON v6.17.15 Gambar, Analisis, dan Monitoring Jaringan
++name=SIGAMON v6.17.16 Gambar, Analisis, dan Monitoring Jaringan
+ qgisMinimumVersion=3.0
+ author=SIGAMON — UP2K Sulawesi Utara
+ email=
+-version=6.17.15
+-changelog=v6.17.15: Hitung Ulang Konstruksi kini selalu memindai TIANG_EKSISTING meski belum memiliki cache tarikan awal. JTM yang berujung pada tiang eksisting menghasilkan TM-4X; bila bentang tersebut underbuild, tiang eksisting yang sama mendapat TR-3 pada konstruksi bawah, bukan TR-3 pada tiang rencana tetangga. Gardu dan JTR biasa tetap mempertahankan aturan TR-7. Pembacaan memakai endpoint UUID/ID plus verifikasi posisi fisik.
++version=6.17.16
++changelog=v6.17.16: Renderer JARINGAN_EKSISTING kini mengikuti warna tipe yang sama dengan Realisasi: JTM/SUTM merah solid, JTR/SUTR biru solid, dan underbuild merah-biru solid sejajar. Renderer tunggal ungu dihapus. Perubahan hanya pada penyajian; geometri, panjang, konstruksi, label, BOQ, dan data jaringan tidak berubah.
++    v6.17.15: Hitung Ulang Konstruksi kini selalu memindai TIANG_EKSISTING meski belum memiliki cache tarikan awal. JTM yang berujung pada tiang eksisting menghasilkan TM-4X; bila bentang tersebut underbuild, tiang eksisting yang sama mendapat TR-3 pada konstruksi bawah, bukan TR-3 pada tiang rencana tetangga. Gardu dan JTR biasa tetap mempertahankan aturan TR-7. Pembacaan memakai endpoint UUID/ID plus verifikasi posisi fisik.
+     v6.17.14: Label jaringan kini mengutamakan manual_distance sebelum jarak_target dan langsung di-refresh setelah koreksi/reset. Pasangan jaringan utama dan underbuild dengan endpoint serta scope proyek/tahap yang sama memakai satu override jarak dan diperbarui dalam satu transaksi. Geometri tidak berubah; Detail Tarikan tetap satu kolom Jarak (m) dan read-only.
+     v6.17.13: Koreksi jarak kecil dipindahkan khusus ke Tools - Alat Peta - Edit Jarak Gawang. Pengguna memilih segmen yang terlihat, melihat jarak geometri/perhitungan/status, lalu mengubah atau mereset override tanpa mengubah geometri. Tampilan BOQ dan Detail Tarikan kembali seperti sebelum fitur koreksi jarak; nilai koreksi tetap dipakai oleh mesin perhitungan.
+     v6.17.12: Menambahkan override Jarak Perhitungan per gawang dan per Tahap Data langsung dari Detail Tarikan. Jarak Geometri tetap terpisah dan tidak berubah; edit/reset hanya menulis field manual_distance, sedangkan KMS, kebutuhan kabel, BOQ, Spreadsheet, dashboard, dan label memakai jarak efektif dari satu helper. Validasi menolak nol, negatif, NaN, infinity, dan teks. Data lama tetap otomatis. Lihat AUDIT_v6.17.12.md.
+--- a/README.txt
++++ b/README.txt
+@@ -1,4 +1,5 @@
+-SIGAMON v6.17.15
++SIGAMON v6.17.16
++Lihat AUDIT_v6.17.16.md untuk warna merah/biru solid jaringan eksisting.
+ Lihat AUDIT_v6.17.15.md untuk perbaikan TM-4X/TR-3 pada tiang eksisting.
+ Lihat AUDIT_v6.17.14.md untuk sinkronisasi label dan satu jarak underbuild.
+ Lihat AUDIT_v6.17.13.md untuk Tools > Alat Peta > Edit Jarak Gawang.
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -1,4 +1,4 @@
+-# SIGAMON v6.17.15
++# SIGAMON v6.17.16
+ 
+ Workspace pengembangan plugin QGIS SIGAMON. Judul Proyek adalah batas data
+ tertinggi: dua Judul Proyek tetap dua dataset walaupun desa, nama Lokasi
+--- /dev/null
++++ b/AUDIT_v6.17.16.md
+@@ -0,0 +1,24 @@
++# Audit SIGAMON v6.17.16
++
++## Perubahan
++
++- `JARINGAN_EKSISTING` tidak lagi memakai satu garis ungu.
++- JTM/SUTM Eksisting ditampilkan merah solid.
++- JTR/SUTR Eksisting ditampilkan biru solid.
++- Underbuild Eksisting ditampilkan sebagai JTM merah dan JTR biru sejajar,
++  keduanya solid.
++- Warna, lebar, dan renderer tipe memakai implementasi bersama dengan jaringan
++  Realisasi; perbedaannya dengan Rencana tetap pada pola garis solid/putus-putus.
++- Fallback Dashboard mengikuti renderer tipe yang sama apabila clone renderer
++  sumber tidak tersedia.
++
++## Batas perubahan
++
++Perubahan hanya menyentuh renderer. Geometri, atribut jaringan, panjang, jarak
++manual, label, konstruksi, BOQ, sinkronisasi Spreadsheet, Preview Map, dan DXF
++tidak diubah.
++
++## Verifikasi
++
++- Test terarah renderer/preview/label: 58 test lulus.
++- Regression penuh: 3.435 test lulus, 6 dilewati, 0 gagal.
+--- /dev/null
++++ b/TEST_MATRIX_v6.17.16.md
+@@ -0,0 +1,13 @@
++# Test Matrix SIGAMON v6.17.16
++
++| Skenario | Expected | Hasil |
++|---|---|---|
++| JTM/SUTM Eksisting | Merah solid | Lulus |
++| JTR/SUTR Eksisting | Biru solid | Lulus |
++| Underbuild Eksisting | JTM merah + JTR biru, keduanya solid | Lulus |
++| Jaringan Realisasi | Tetap memakai renderer merah/biru solid | Lulus |
++| Jaringan Rencana | Tetap merah/biru putus-putus | Lulus |
++| Label panjang Eksisting | Aturan lama tetap | Lulus |
++| Preview Map dan DXF | Tidak berubah | Lulus |
++| Geometri, jarak, BOQ, konstruksi | Tidak berubah | Lulus |
++| Regression penuh | 3.435 lulus, 6 dilewati, 0 gagal | Lulus |
