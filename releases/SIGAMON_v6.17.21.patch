@@ -1,0 +1,642 @@
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/AUDIT_v6.17.21.md /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/AUDIT_v6.17.21.md
+--- /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/AUDIT_v6.17.21.md	1970-01-01 08:00:00.000000000 +0800
++++ /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/AUDIT_v6.17.21.md	2026-09-12 07:13:21.306203997 +0800
+@@ -0,0 +1,43 @@
++# Audit SIGAMON v6.17.21
++
++## Masalah
++
++Overlay underbuild pada JTM Eksisting sebelumnya diperlakukan seperti
++underbuild komposit biasa. Akibatnya renderer menggambar ulang garis merah
++Rencana secara putus-putus di atas carrier merah solid. Sinkronisasi tarikan
++awal juga memindai `JARINGAN_EKSISTING`, sehingga setiap TS sepanjang carrier
++dianggap sumber JTM dan diberi `TM-4X`. Konstruksi bawah ditulis `TR-3` per
++endpoint ruas, sedangkan BOQ hanya menurunkan dua terminasi route; label dan
++BOQ menjadi tidak konsisten.
++
++## Perbaikan
++
++- Overlay `JTR UNDERBUILD PADA JARINGAN EKSISTING` dirender sebagai garis JTR
++  biru saja. Garis JTM merah tetap berasal dari `JARINGAN_EKSISTING`, sehingga
++  selalu solid dan tidak digambar ulang sebagai garis Rencana.
++- Evaluator khusus memproses seluruh node `TIANG_EKSISTING` pada route overlay
++  sebagai graf TR. Endpoint, lintasan, belokan, cabang, dan perempatan dihitung
++  dari degree serta sudut melalui tabel SK-GM yang sama dengan JTR biasa.
++- `TR-3` hanya dipaksakan bila sebuah route benar-benar berterminasi pada node.
++  Node tembus tidak lagi menerima `TR-3` dari masing-masing ruas.
++- BOQ membentuk record tahap untuk seluruh konstruksi bawah route existing:
++  terminasi dari route, dan tipe node lainnya dari hasil evaluator topologi.
++- Pemindai tarikan awal hanya membaca `JARINGAN_RENCANA` dan
++  `JARINGAN_AKTUAL`. Carrier existing dan overlay JTR existing tidak dapat
++  menciptakan `TM-4X`.
++- `TM-4X` hanya dipertahankan bila ada edge JTM kerja yang benar-benar mulai
++  dari tiang existing. Nilai `TM-4X`/ledger stale dari versi sebelumnya
++  dibersihkan otomatis ketika Hitung Ulang dijalankan.
++- Scope tetap dibatasi Judul Proyek dan Lokasi Proyek/ID lokasi; lokasi yang
++  berdekatan dalam desa yang sama tidak dapat bergabung.
++
++## Batas Perubahan
++
++Tidak ada perubahan pada geometri, Jarak (m) input, perhitungan kabel, sagging,
++tambahan konstruksi, CEIL, koordinat, Google Spreadsheet, DXF, Preview Maps,
++atau filter operasional F11.
++
++## Verifikasi
++
++- Test fokus underbuild/topologi/konstruksi/DXF: 131 lulus, 0 gagal.
++- Regression penuh: 3.474 lulus, 6 dilewati, 0 gagal.
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/CLAUDE.md /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/CLAUDE.md
+--- /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/CLAUDE.md	2026-09-12 06:41:22.000000000 +0800
++++ /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/CLAUDE.md	2026-09-12 07:13:19.650208301 +0800
+@@ -1,4 +1,4 @@
+-# SIGAMON v6.17.20
++# SIGAMON v6.17.21
+ 
+ Workspace pengembangan plugin QGIS SIGAMON. Judul Proyek adalah batas data
+ tertinggi: dua Judul Proyek tetap dua dataset walaupun desa, nama Lokasi
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/README.txt /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/README.txt
+--- /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/README.txt	2026-09-12 06:41:20.000000000 +0800
++++ /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/README.txt	2026-09-12 07:13:18.826210450 +0800
+@@ -1,4 +1,7 @@
+-SIGAMON v6.17.20
++SIGAMON v6.17.21
++Lihat AUDIT_v6.17.21.md untuk topologi konstruksi underbuild pada jaringan
++Eksisting, aturan TM-4X hanya untuk tarikan awal JTM nyata, BOQ lengkap, dan
++renderer carrier Eksisting yang tetap solid.
+ Lihat AUDIT_v6.17.20.md untuk penambahan underbuild langsung pada JTM
+ Eksisting tanpa menggandakan JTM/TM-4X dan dengan Jarak (m) input yang sama.
+ Lihat AUDIT_v6.17.19.md untuk deduplikasi TM-4X per tiang fisik dan
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/TEST_MATRIX_v6.17.21.md /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/TEST_MATRIX_v6.17.21.md
+--- /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/TEST_MATRIX_v6.17.21.md	1970-01-01 08:00:00.000000000 +0800
++++ /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/TEST_MATRIX_v6.17.21.md	2026-09-12 07:13:22.102201927 +0800
+@@ -0,0 +1,16 @@
++# Test Matrix SIGAMON v6.17.21
++
++| Skenario | Expected | Hasil |
++|---|---|---|
++| Overlay JTR pada JTM Eksisting Rencana | Merah carrier tetap solid; hanya JTR overlay mengikuti style tahap | Lulus |
++| TS dilalui carrier Eksisting tanpa tarikan JTM kerja | Tidak mendapat TM-4X | Lulus |
++| JTM Rencana/Realisasi benar-benar mulai dari TS | TM-4X tercatat satu kali | Lulus |
++| Route underbuild berterminasi | Endpoint mendapat TR-3 | Lulus |
++| Route underbuild melintas node | Bukan TR-3 per ruas; memakai degree+sudut | Lulus |
++| Route berbelok/bercabang | Rekomendasi TR mengikuti tabel SK-GM | Lulus |
++| BOQ underbuild pada existing | Memuat terminasi dan seluruh tipe node topologis | Lulus |
++| Nilai TM-4X/TR-3 stale v6.17.20 | Dibersihkan/dihitung ulang dalam transaksi | Lulus |
++| Dua lokasi berdekatan dalam desa sama | Tidak tercampur | Lulus |
++| Jarak (m) utama dan underbuild | Tetap satu nilai input | Lulus |
++| Rencana Awal/Akhir/Realisasi | Tetap terisolasi per tahap | Lulus |
++| Regression penuh | 3.474 lulus, 6 dilewati, 0 gagal | Lulus |
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/metadata.txt /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/metadata.txt
+--- /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/metadata.txt	2026-09-12 06:41:18.000000000 +0800
++++ /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/metadata.txt	2026-09-12 07:13:17.966212685 +0800
+@@ -1,10 +1,11 @@
+ [general]
+-name=SIGAMON v6.17.20 Gambar, Analisis, dan Monitoring Jaringan
++name=SIGAMON v6.17.21 Gambar, Analisis, dan Monitoring Jaringan
+ qgisMinimumVersion=3.0
+ author=SIGAMON — UP2K Sulawesi Utara
+ email=
+-version=6.17.20
+-changelog=v6.17.20: Tambah Underbuild kini membaca graph gabungan JTM tahap terpilih dan JARINGAN_EKSISTING dalam Lokasi Proyek yang sama. JTM Eksisting tetap read-only; SIGAMON membuat satu overlay JTR pada layer Rencana/Aktual, mempertahankan Jarak (m) input, dan memberi parent_uid sumber agar idempotent. Overlay dihitung sebagai JTR saja sehingga BOQ menghasilkan satu TM-4X dari carrier eksisting dan TR-3 pada terminasi tanpa menggandakan JTM/TM-4X. Lihat AUDIT_v6.17.20.md.
++version=6.17.21
++changelog=v6.17.21: Underbuild pada JTM Eksisting kini memakai topologi JTR penuh: TR-3 hanya pada terminasi, sedangkan titik tembus/belokan/cabang mengikuti degree dan sudut serta seluruh tipenya masuk BOQ. Carrier Eksisting tidak lagi dianggap tarikan awal; TM-4X hanya muncul bila ada edge JTM Rencana/Realisasi yang benar-benar mulai dari tiang eksisting. Overlay hanya menggambar JTR sehingga garis merah JTM Eksisting tetap solid. Nilai stale v6.17.20 dibersihkan saat Hitung Ulang. Lihat AUDIT_v6.17.21.md.
++    v6.17.20: Tambah Underbuild kini membaca graph gabungan JTM tahap terpilih dan JARINGAN_EKSISTING dalam Lokasi Proyek yang sama. JTM Eksisting tetap read-only; SIGAMON membuat satu overlay JTR pada layer Rencana/Aktual, mempertahankan Jarak (m) input, dan memberi parent_uid sumber agar idempotent. Overlay dihitung sebagai JTR saja sehingga BOQ menghasilkan satu TM-4X dari carrier eksisting dan TR-3 pada terminasi tanpa menggandakan JTM/TM-4X. Lihat AUDIT_v6.17.20.md.
+     v6.17.19: Memperbaiki BOQ tiang eksisting secara topologis. TM-4X kini dideduplikasi satu kali per tiang fisik, tahap, dan Lokasi Proyek walaupun beberapa edge menempel. TR-3 underbuild pada tiang eksisting dihitung dari terminasi route aktif: satu route berakhir = satu TR-3, route tembus = nol, dan dua route berakhir = dua. UUID endpoint tetap utama dan ID legacy tidak boleh menyeberang lokasi. Lihat AUDIT_v6.17.19.md.
+     v6.17.17: Tambah/Hapus Underbuild kini memperlakukan TIANG_EKSISTING sebagai node topologi bersama pada Rencana Awal, Rencana Akhir, dan Realisasi. Pemilihan serta penulisan konstruksi memakai scope Judul Proyek/Lokasi Proyek dan endpoint UUID-first; ID hanya fallback data lama. TM-4X utama dan TR-3 bawah dapat tersimpan bersama pada satu tiang eksisting dalam transaksi yang sama, termasuk terminasi ganda. Tiang eksisting tidak disalin ke layer tahap. Jarak (m) manual tetap satu sumber untuk gawang utama/underbuild. Lihat AUDIT_v6.17.17.md.
+     v6.17.16: Renderer JARINGAN_EKSISTING kini mengikuti warna tipe yang sama dengan Realisasi: JTM/SUTM merah solid, JTR/SUTR biru solid, dan underbuild merah-biru solid sejajar. Renderer tunggal ungu dihapus. Perubahan hanya pada penyajian; geometri, panjang, konstruksi, label, BOQ, dan data jaringan tidak berubah.
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/plugin.py /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/plugin.py
+--- /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/plugin.py	2026-09-12 06:41:20.000000000 +0800
++++ /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/plugin.py	2026-09-12 07:13:17.110214911 +0800
+@@ -417,7 +417,7 @@
+             return None
+ 
+ # Versi plugin untuk ditampilkan kecil pada header panel (informasi saja).
+-PLN_TOOLS_VERSION = "v6.17.20"
++PLN_TOOLS_VERSION = "v6.17.21"
+ DXF_LAST_EXPORT_FOLDER_KEY = "PLNTools/dxf_last_export_folder"
+ PREVIEW_LAST_EXPORT_FOLDER_KEY = "PLNTools/preview_last_export_folder"
+ 
+@@ -60302,11 +60302,14 @@
+         anchor_scope = self._engineering_feature_values(anchor_feature)
+ 
+         rows_by_key = {}
+-        for layer_name, work_status in (
+-            ("JARINGAN_RENCANA", "Rencana"),
+-            ("JARINGAN_AKTUAL", "Aktual"),
+-            ("JARINGAN_EKSISTING", "Eksisting"),
+-        ):
++        # Hanya jaringan KERJA yang dapat membuktikan adanya tarikan awal dari
++        # tiang eksisting. JARINGAN_EKSISTING adalah carrier/aset yang memang
++        # sudah menempel pada seluruh TS; memasukkannya di sini akan membuat
++        # setiap tiang sepanjang carrier keliru menjadi TM-4X.
++        for layer_name, work_status in (
++            ("JARINGAN_RENCANA", "Rencana"),
++            ("JARINGAN_AKTUAL", "Aktual"),
++        ):
+             network_layer = self.get_layer(layer_name)
+             if network_layer is None or not network_layer.isValid():
+                 continue
+@@ -60407,6 +60410,20 @@
+                 if not pln_underbuild.same_topology_scope(
+                         segment_scope, anchor_scope):
+                     continue
++                # Overlay JTR yang menumpang pada carrier eksisting bukan
++                # tarikan awal JTM. Konstruksi TR-nya dihitung oleh evaluator
++                # topologi underbuild (degree + sudut), bukan satu TR-3 untuk
++                # setiap endpoint ruas.
++                overlay_text = " ".join(str(
++                    self.get_feature_value_safe(segment, name, "") or ""
++                ) for name in (
++                    "jenis_jaringan", "jaringan_utama", "tipe_jaringan",
++                )).upper()
++                if (
++                    "JTR UNDERBUILD PADA JARINGAN EKSISTING" in overlay_text
++                    or "REFERENSI EKSISTING" in overlay_text
++                ):
++                    continue
+                 has_jtm, has_jtr, is_underbuild = (
+                     _pln_network_length_segment_flags(
+                         " ".join(str(self.get_feature_value_safe(
+@@ -65180,14 +65197,15 @@
+         except Exception:
+             return int(minimum or 0)
+ 
+-    def _recalculate_component_constructions(self, point_layer, network_layer, component_id,
++    def _recalculate_component_constructions(self, point_layer, network_layer, component_id,
+                                              finalize=True, classification_hint="", affected_ids=None,
+                                              transaction=None, external_points=None,
+                                              existing_connection_ids=None, pending_points=None,
+                                              pending_lines=None,
+                                              allow_invalid_angle_fallback=False,
+-                                             sync_gardu_symbols=True,
+-                                             strict_affected=False, engineering_scope=None):
++                                             sync_gardu_symbols=True,
++                                             strict_affected=False, engineering_scope=None,
++                                             existing_underbuild_overlay=False):
+         """Hitung konstruksi satu komponen jaringan dari topologi realisasi.
+ 
+         Underbuild dibangun sebagai graf TR terpisah pada segmen yang sama dan
+@@ -65351,10 +65369,18 @@
+         component_points = []
+         virtual_ids = set()
+         gardu_anchor_ids = set()
+-        for ft in point_layer.getFeatures(point_request):
+-            if engineering_scope is not None and not pln_underbuild.same_scope(
+-                    engineering_scope, self._engineering_feature_values(ft)):
+-                continue
++        for ft in point_layer.getFeatures(point_request):
++            point_values = self._engineering_feature_values(ft)
++            point_scope_matches = (
++                pln_underbuild.same_topology_scope(
++                    engineering_scope, point_values
++                ) if existing_underbuild_overlay
++                else pln_underbuild.same_scope(
++                    engineering_scope, point_values
++                )
++            ) if engineering_scope is not None else True
++            if not point_scope_matches:
++                continue
+             pole_id = str(self.get_feature_value_safe(ft, "id_tiang", "") or "").strip()
+             is_component_point = str(self.get_feature_value_safe(ft, "id_jalur", "") or "").strip() == component_id
+             if pole_id:
+@@ -66173,14 +66199,24 @@
+                         )
+                     ):
+                         continue
+-                classification = str(self.get_feature_value_safe(
+-                    ft, "klasifikasi", classification_hint
+-                ) or classification_hint).upper()
+-                cls = (
+-                    "TR"
+-                    if "TR" in classification and "TM" not in classification
+-                    else "TM"
+-                )
++                classification = str(self.get_feature_value_safe(
++                    ft, "klasifikasi", classification_hint
++                ) or classification_hint).upper()
++                cls = (
++                    "TR"
++                    if "TR" in classification and "TM" not in classification
++                    else "TM"
++                )
++                if (
++                    existing_underbuild_overlay
++                    and self._manual_anchor_is_strict_existing_tiang(
++                        point_layer, ft
++                    )
++                ):
++                    # Carrier eksisting selalu menjadi jaringan utama TM pada
++                    # pass khusus overlay, walaupun proyek lama belum mengisi
++                    # field klasifikasi tiangnya.
++                    cls = "TM"
+                 active_cls = (
+                     "TR"
+                     if "TR" in str(classification_hint or "").upper()
+@@ -66237,20 +66273,33 @@
+                     # yang sama dengan pass utama. gardu_anchor_ids/record GARDU
+                     # legacy tidak boleh membuat TM-1 lokal dianggap sumber TR-7
+                     # dan menyebabkan perhitungan lower dilewati.
+-                    cross_is_pull_source = bool(
+-                        self._manual_anchor_is_strict_existing_tiang(
+-                            point_layer, ft
+-                        )
+-                        or self.tiang_has_current_gardu_evidence(
+-                            point_layer, ft
+-                        )
+-                    )
++                    cross_is_existing = bool(
++                        self._manual_anchor_is_strict_existing_tiang(
++                            point_layer, ft
++                        )
++                    )
++                    cross_is_gardu_source = bool(
++                        self.tiang_has_current_gardu_evidence(
++                            point_layer, ft
++                        )
++                    )
++                    # Pada overlay JTR di atas carrier eksisting, status TS
++                    # bukan bukti tarikan awal. Semua node carrier harus
++                    # dievaluasi seperti graf TR biasa; hanya Gardu nyata yang
++                    # tetap menjadi sumber TR-7.
++                    cross_lower_is_pull_source = bool(
++                        cross_is_gardu_source
++                        or (
++                            cross_is_existing
++                            and not existing_underbuild_overlay
++                        )
++                    )
+                     should_recalculate_lower = bool(
+                         cls == "TM"
+                         and active_cls == "TR"
+                         and cross_tr_degree > 0
+                         and (under_degree_only > 0 or has_under_marker)
+-                        and not cross_is_pull_source
++                        and not cross_lower_is_pull_source
+                     )
+                     if should_recalculate_lower:
+                         lower_graph = tr_adjacency
+@@ -66399,7 +66448,7 @@
+                             )
+ 
+                         cross_endpoint_has_gardu = bool(
+-                            cross_is_pull_source
++                            cross_lower_is_pull_source
+                             or (
+                                 lower_degree <= 1
+                                 and connected_underbuild_has_gardu_endpoint(
+@@ -66413,7 +66462,7 @@
+                         # rekomendasi SK-GM normal (TR-3 untuk fixed dead-end),
+                         # dan tidak boleh dipromosikan menjadi TR-7.
+                         if (
+-                            not cross_is_pull_source
++                            not cross_lower_is_pull_source
+                             and canonicalize_construction(lower_used) == "TR-7"
+                         ):
+                             lower_used = lower_rec.code
+@@ -66439,7 +66488,7 @@
+                                 ft, "konstruksi_bawah_4", ""
+                             ),
+                         ]
+-                        if not cross_is_pull_source:
++                        if not cross_lower_is_pull_source:
+                             if lower_degree <= 2:
+                                 # Satu jalur tembus mempunyai satu konstruksi
+                                 # bawah pada titik, bukan satu slot per arah.
+@@ -66463,7 +66512,7 @@
+                         lower_slots = [lower_used] + lower_extra_slots
+                         route_ends = self._underbuild_termination_count(
+                             network_layer, ft, pid, source_lines, pending_lines, minimum=0)
+-                        if route_ends and not cross_is_pull_source and not lower_lock:
++                        if route_ends and not cross_lower_is_pull_source and not lower_lock:
+                             lower_used = pln_underbuild.TERMINATION_CODE
+                             lower_automatic = lower_used
+                             lower_reason = "{} jalur underbuild berakhir pada tiang ini.".format(route_ends)
+@@ -66514,7 +66563,7 @@
+                                 )
+                             ),
+                         }
+-                        if not cross_is_pull_source:
++                        if not cross_lower_is_pull_source:
+                             # Hard invariant v438: ordinary Rencana/Aktual poles
+                             # cannot retain the TR-7 pull ledger either. This
+                             # prevents BOQ/labels from resurrecting stale TR-7
+@@ -69185,6 +69234,9 @@
+                             "jaringan_bawah": self._feature_attr(
+                                 layer, feature, "jaringan_bawah", ""
+                             ),
++                            "jaringan_utama": self._feature_attr(
++                                layer, feature, "jaringan_utama", ""
++                            ),
+                             "from_feature_uuid": self._feature_attr(
+                                 layer, feature, FROM_UUID_FIELD, ""
+                             ),
+@@ -69313,11 +69365,13 @@
+                         ),
+                     })
+ 
+-        # TR-3 pada TIANG_EKSISTING diturunkan dari topologi jaringan kerja
+-        # TERPILIH, bukan dari status fisik tiangnya. Slot pada aset eksisting
+-        # tidak membawa Rencana Awal/Akhir/Realisasi dan karena itu tidak cukup
+-        # untuk BOQ per tahap. Satu route underbuild yang berakhir = satu TR-3;
+-        # route yang hanya melintas (dua segmen route sama) = nol.
++        # Konstruksi bawah pada TIANG_EKSISTING diturunkan dari jaringan kerja
++        # TERPILIH, bukan dari status fisik tiangnya. Untuk terminasi, topologi
++        # route tetap menjadi sumber mutlak TR-3. Untuk node tembus/cabang pada
++        # overlay carrier eksisting, gunakan hasil evaluator degree+sudut yang
++        # baru saja ditulis ke slot bawah. Dengan demikian BOQ tidak hanya
++        # berisi dua TR-3 endpoint, tetapi juga TR-1/TR-2/TR-5/dst. sepanjang
++        # jalur sesuai topologi.
+         existing_underbuild_records = []
+         underbuild_by_pole_status = {}
+         underbuild_record_templates = {}
+@@ -69337,19 +69391,55 @@
+                 connections = [
+                     row for row in selected_work_network_endpoint_rows
+                     if row.get("status") == work_status
++                    and bool(row.get("has_jtr"))
++                    and bool(row.get("is_under"))
+                     and pln_construction_display._connection_matches_pole(
+                         row, record
+                     )
+                 ]
+-                count = pln_underbuild.termination_count(
+-                    pole_identity, connections, minimum=0
+-                )
+-                if count <= 0:
++                if not connections:
++                    continue
++                route_rows = {}
++                for connection in connections:
++                    route = (
++                        pln_underbuild.route_key(connection)
++                        or str(connection.get("edge_identity") or "")
++                    )
++                    route_rows.setdefault(route, []).append(connection)
++                codes = []
++                for route_connections in route_rows.values():
++                    count = pln_underbuild.termination_count(
++                        pole_identity, route_connections, minimum=0
++                    )
++                    if count > 0:
++                        codes.extend(["TR-3"] * int(count))
++                        continue
++                    overlay_route = any(
++                        "JTR UNDERBUILD PADA JARINGAN EKSISTING" in str(
++                            row.get("jenis_jaringan") or ""
++                        ).upper()
++                        or "REFERENSI EKSISTING" in str(
++                            row.get("jaringan_utama") or ""
++                        ).upper()
++                        for row in route_connections
++                    )
++                    if not overlay_route:
++                        continue
++                    lower_code = next((
++                        canonicalize_construction(
++                            record.get("konstruksi_bawah_{}".format(index))
++                        )
++                        for index in range(1, 5)
++                        if canonicalize_construction(
++                            record.get("konstruksi_bawah_{}".format(index))
++                        ).startswith("TR-")
++                    ), "")
++                    if lower_code:
++                        codes.append(lower_code)
++                if not codes:
+                     continue
+                 key = (physical_key, work_status)
+-                underbuild_by_pole_status[key] = max(
+-                    int(underbuild_by_pole_status.get(key, 0)), int(count)
+-                )
++                underbuild_by_pole_status[key] = list(codes)
+                 template = dict(record)
+                 template["status_data"] = work_status
+                 template["konstruksi"] = ""
+@@ -69359,15 +69449,18 @@
+                 for index in range(1, 5):
+                     template["konstruksi_bawah_{}".format(index)] = ""
+                 underbuild_record_templates[key] = template
+-        for key, count in underbuild_by_pole_status.items():
++        for key, codes in underbuild_by_pole_status.items():
+             template = underbuild_record_templates.get(key)
+             if not isinstance(template, dict):
+                 continue
+-            for index in range(1, min(4, int(count)) + 1):
+-                template["konstruksi_bawah_{}".format(index)] = "TR-3"
+-            template["konstruksi_bawah"] = " ".join(
+-                ["TR-3"] * min(4, int(count))
+-            )
++            codes = [str(code or "").strip() for code in codes if code]
++            if len(codes) > 4:
++                raise ValueError(
++                    "Satu tiang eksisting melebihi empat konstruksi bawah."
++                )
++            for index, code in enumerate(codes, 1):
++                template["konstruksi_bawah_{}".format(index)] = code
++            template["konstruksi_bawah"] = " ".join(codes)
+             existing_underbuild_records.append(template)
+ 
+         self._boq_debug_flush(
+@@ -69555,6 +69648,28 @@
+         if not isinstance(point_layers, (list, tuple)):
+             point_layers = [point_layers]
+         point_layers = [layer for layer in point_layers if layer is not None]
++        segments = []
++        for feature in network_layer.getFeatures():
++            values = self._engineering_feature_values(feature)
++            if pln_underbuild.same_scope(scope, values):
++                values["fid"] = int(feature.id())
++                segments.append(values)
++
++        def is_existing_carrier_overlay(values):
++            text = " ".join(str(values.get(name) or "") for name in (
++                "jenis_jaringan", "jaringan_utama", "tipe_jaringan",
++            )).upper()
++            return bool(
++                "JTR UNDERBUILD PADA JARINGAN EKSISTING" in text
++                or "REFERENSI EKSISTING" in text
++            )
++
++        overlay_components = {
++            str(values.get("id_jalur") or "").strip()
++            for values in segments
++            if is_existing_carrier_overlay(values)
++            and str(values.get("id_jalur") or "").strip()
++        }
+         stage_point_layer = self.stage_layer("TIANG", scope.get("tahap_data"))
+         for component_id in sorted(component_ids):
+             if stage_point_layer is None:
+@@ -69564,14 +69679,23 @@
+                 finalize=True, classification_hint="TM", transaction=transaction,
+                 affected_ids=endpoint_ids, strict_affected=True,
+                 allow_invalid_angle_fallback=True, sync_gardu_symbols=False,
+-                engineering_scope=scope,
+-            )
+-        segments = []
+-        for feature in network_layer.getFeatures():
+-            values = self._engineering_feature_values(feature)
+-            if pln_underbuild.same_scope(scope, values):
+-                values["fid"] = int(feature.id())
+-                segments.append(values)
++                engineering_scope=scope,
++            )
++            if component_id in overlay_components:
++                for existing_point_layer in point_layers:
++                    if not str(
++                        existing_point_layer.name() or ""
++                    ).upper().startswith("TIANG_EKSISTING"):
++                        continue
++                    self._recalculate_component_constructions(
++                        existing_point_layer, network_layer, component_id,
++                        finalize=True, classification_hint="TR",
++                        transaction=transaction, affected_ids=endpoint_ids,
++                        strict_affected=True,
++                        allow_invalid_angle_fallback=True,
++                        sync_gardu_symbols=False, engineering_scope=scope,
++                        existing_underbuild_overlay=True,
++                    )
+         endpoint_pairs = set(endpoint_pairs or ())
+         for point_layer in point_layers:
+             for point in point_layer.getFeatures():
+@@ -69589,6 +69713,10 @@
+                 incident = pln_underbuild.incident_underbuild_segments(
+                     keys, segments
+                 )
++                incident_overlay = [
++                    row for row in incident
++                    if is_existing_carrier_overlay(row)
++                ]
+                 updates = {
+                     "status_underbuild": "Ya" if incident else "Tidak",
+                     "ada_jtr": "Ya" if incident else "Tidak",
+@@ -69611,6 +69739,23 @@
+                         "Tiang {} melebihi empat slot konstruksi bawah."
+                         .format(values["id_tiang"])
+                     )
++                # Overlay pada carrier eksisting sudah dihitung dari graf TR
++                # penuh di atas. Jangan timpa hasil degree/sudut itu dengan
++                # TR-3 endpoint-per-ruas dari jalur kompatibilitas lama.
++                if incident_overlay and is_existing:
++                    transaction.snapshot_and_change(point_layer, point.id(), {
++                        key: value for key, value in updates.items()
++                        if point_layer.fields().indexFromName(key) >= 0
++                    })
++                    # Sinkronisasi ini kini hanya membaca jaringan kerja dan
++                    # mengabaikan overlay carrier. Jadi TM-4X hanya bertahan
++                    # bila ada tarikan awal JTM nyata pada TS; nilai stale dari
++                    # versi lama otomatis dibersihkan.
++                    self._sync_existing_anchor_pull_feature(
++                        point_layer, point, transaction
++                    )
++                    continue
++
+                 # Gardu tetap dikelola oleh aturan sumber TR-7. Tiang
+                 # Eksisting berbeda: ia boleh menyimpan TM-4X utama sekaligus
+                 # TR-3 bawah saat underbuild berterminasi di node yang sama.
+@@ -81763,6 +81908,15 @@
+     def _apply_jaringan_type_style(self, layer, dashed, suffix, width):
+         """Pasang renderer JTM merah/JTR biru untuk satu status jaringan."""
+         root_rule = QgsRuleBasedRenderer.Rule(None)
++        # Overlay ini hanya mewakili penghantar JTR yang ditambahkan di atas
++        # carrier JTM eksisting. Jangan gambar ulang merah dengan pola Rencana,
++        # karena garis merah solid sudah berasal dari JARINGAN_EKSISTING.
++        existing_overlay_expr = (
++            "(upper(coalesce(\"jenis_jaringan\",'')) LIKE "
++            "'%JTR UNDERBUILD PADA JARINGAN EKSISTING%' OR "
++            "upper(coalesce(\"jaringan_utama\",'')) = "
++            "'REFERENSI EKSISTING')"
++        )
+         # Underbuild disimpan sebagai satu feature fisik: JTM pada jaringan
+         # utama dan JTR pada jaringan bawah. Renderer komposit membuat kedua
+         # penghantar terlihat tanpa menggandakan feature/panjang/topologi.
+@@ -81781,7 +81935,13 @@
+             "upper(coalesce(\"jaringan_utama\",'')) LIKE '%JTR%')"
+         )
+         rules = [
+-            ("JTM + JTR Underbuild ({})".format(suffix), under_expr,
++            ("JTR Underbuild pada Eksisting ({})".format(suffix),
++             existing_overlay_expr,
++             self.line_symbol(
++                 "0,80,220", width=width, offset=-0.34, dashed=dashed
++             )),
++            ("JTM + JTR Underbuild ({})".format(suffix),
++             "NOT " + existing_overlay_expr + " AND " + under_expr,
+              self.underbuild_line_symbol(width=width, dashed=dashed)),
+             ("JTM Biasa ({})".format(suffix),
+              "NOT " + under_expr + " AND " + jtm_expr,
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/tests/test_existing_underbuild_nodes.py /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/tests/test_existing_underbuild_nodes.py
+--- /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/tests/test_existing_underbuild_nodes.py	2026-09-12 06:32:04.000000000 +0800
++++ /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/tests/test_existing_underbuild_nodes.py	2026-09-12 07:04:47.432275381 +0800
+@@ -108,6 +108,17 @@
+         )
+         self.assertIn("_pln_network_length_segment_flags", source)
+         self.assertIn("anchor_construction_occurrences", source)
++        self.assertNotIn('("JARINGAN_EKSISTING", "Eksisting")', source)
++        self.assertIn("REFERENSI EKSISTING", source)
++        self.assertIn("continue", source)
++
++    def test_tm4x_requires_a_real_work_jtm_initial_pull(self):
++        source = method_source(
++            self.source, "_manual_existing_anchor_pull_rows"
++        )
++        self.assertIn('("JARINGAN_RENCANA", "Rencana")', source)
++        self.assertIn('("JARINGAN_AKTUAL", "Aktual")', source)
++        self.assertNotIn('("JARINGAN_EKSISTING", "Eksisting")', source)
+ 
+     def test_recalculation_writes_existing_anchor_in_same_transaction(self):
+         source = method_source(self.source, "_recalculate_underbuild_edit")
+@@ -115,6 +126,18 @@
+         self.assertIn("_sync_existing_anchor_pull_feature", source)
+         self.assertIn("is_existing", source)
+         self.assertIn('slot_values(\n                        "TR-3"', source)
++        self.assertIn("existing_underbuild_overlay=True", source)
++        self.assertIn('classification_hint="TR"', source)
++        self.assertIn("incident_overlay", source)
++
++    def test_existing_overlay_lower_construction_uses_topology_pass(self):
++        source = method_source(
++            self.source, "_recalculate_component_constructions"
++        )
++        self.assertIn("existing_underbuild_overlay=False", source)
++        self.assertIn("cross_lower_is_pull_source", source)
++        self.assertIn("cross_is_gardu_source", source)
++        self.assertIn("topology_angles_for(pid, lower_graph)", source)
+ 
+     def test_delete_underbuild_recalculates_stage_and_existing_nodes(self):
+         source = method_source(self.source, "delete_underbuild_path")
+@@ -155,6 +178,16 @@
+         self.assertIn("pln_underbuild.termination_count", source)
+         self.assertIn("pln_construction_display._connection_matches_pole", source)
+         self.assertIn("list(records) + existing_underbuild_records", source)
++        self.assertIn("route_rows", source)
++        self.assertIn("lower_code", source)
++        self.assertIn("JTR UNDERBUILD PADA JARINGAN EKSISTING", source)
++
++    def test_existing_carrier_red_line_is_not_redrawn_as_dashed_overlay(self):
++        source = method_source(self.source, "_apply_jaringan_type_style")
++        self.assertIn("existing_overlay_expr", source)
++        self.assertIn("JTR Underbuild pada Eksisting", source)
++        self.assertIn('"0,80,220"', source)
++        self.assertIn('"NOT " + existing_overlay_expr', source)
+ 
+ 
+ if __name__ == "__main__":
+diff -ruN '--exclude=__pycache__' '--exclude=*.pyc' /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/underbuild_termination.py /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/underbuild_termination.py
+--- /tmp/tmp.McmLtSAmDQ/pln_gambar_jaringan_sederhana_qgis4/underbuild_termination.py	2026-09-11 13:25:52.000000000 +0800
++++ /workspace/scratch/106eef1fce21/work/pln_gambar_jaringan_sederhana_qgis4/underbuild_termination.py	2026-09-12 07:13:20.510206069 +0800
+@@ -70,10 +70,11 @@
+         strict_existing=False, is_gardu=False):
+     """Kode konstruksi pada endpoint sumber lintas layer/status.
+ 
+-    Tiang eksisting pada JTM selalu menjadi TM-4X. Jika bentang yang sama
+-    membawa JTR underbuild, ujung bawah pada tiang eksisting adalah TR-3,
+-    bukan TR-7 dan bukan dipindahkan ke tiang rencana tetangganya. Gardu tetap
+-    menjadi sumber tarikan TR-7 sesuai aturan existing.
++    Tiang eksisting pada *edge JTM kerja yang benar-benar mulai darinya*
++    menjadi TM-4X. Carrier ``JARINGAN_EKSISTING`` sendiri tidak boleh diberikan
++    ke fungsi ini. Jika edge kerja yang sama membawa JTR underbuild, ujung bawah
++    pada tiang eksisting adalah TR-3. Overlay JTR sepanjang carrier existing
++    dihitung terpisah memakai graf degree+sudut, bukan fungsi endpoint ini.
+     """
+     result = []
+     if bool(is_underbuild):
