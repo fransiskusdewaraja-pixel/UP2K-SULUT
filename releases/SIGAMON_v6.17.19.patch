@@ -1,0 +1,652 @@
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -1,4 +1,4 @@
+-# SIGAMON v6.17.18
++# SIGAMON v6.17.19
+ 
+ Workspace pengembangan plugin QGIS SIGAMON. Judul Proyek adalah batas data
+ tertinggi: dua Judul Proyek tetap dua dataset walaupun desa, nama Lokasi
+--- a/README.txt
++++ b/README.txt
+@@ -1,6 +1,6 @@
+-SIGAMON v6.17.18
+-Lihat AUDIT_v6.17.18.md untuk isolasi TM-4X dan Tambah Underbuild pada
+-Lokasi Proyek yang berdekatan.
++SIGAMON v6.17.19
++Lihat AUDIT_v6.17.19.md untuk deduplikasi TM-4X per tiang fisik dan
++pembacaan TR-3 terminasi underbuild pada tiang eksisting.
+ Lihat AUDIT_v6.17.17.md untuk dukungan underbuild pada TIANG_EKSISTING di
+ Rencana Awal, Rencana Akhir, dan Realisasi.
+ Lihat AUDIT_v6.17.16.md untuk warna merah/biru solid jaringan eksisting.
+--- a/boq_rules.py
++++ b/boq_rules.py
+@@ -493,6 +493,30 @@
+     )
+ 
+ 
++def _physical_pole_identity(record):
++    """Identitas anchor fisik untuk TM-4X, aman lintas Lokasi Proyek.
++
++    TM-4X adalah satu konstruksi pada satu tiang eksisting, bukan satu per
++    edge yang keluar darinya. UUID adalah kunci utama. Data lama tanpa UUID
++    memakai proyek + Lokasi Proyek + ID tiang agar ID sama pada dua lokasi
++    berdekatan tidak saling menghapus.
++    """
++    rec = record or {}
++    uuid = str(rec.get("feature_uuid") or "").strip().casefold()
++    if uuid:
++        return ("uuid", uuid)
++    project = str(
++        rec.get("project_key") or rec.get("id_proyek") or ""
++    ).strip().casefold()
++    location = str(
++        rec.get("id_lokasi") or rec.get("lokasi_proyek") or ""
++    ).strip().casefold()
++    pole_id = str(
++        rec.get("id") or rec.get("id_tiang") or rec.get("fid") or ""
++    ).strip().casefold()
++    return ("legacy", project, location, pole_id)
++
++
+ def construction_occurrences_with_dedup_key(record):
+     """Tambahkan kunci deduplikasi global pada setiap kemunculan konstruksi.
+ 
+@@ -520,7 +544,16 @@
+                 else "FALLBACK:{}".format(pull_index + 1)
+             )
+             identity_text = str(identity or "").strip().casefold()
+-            if identity_text.startswith("edge:"):
++            if canonical == "TM-4X":
++                # Satu anchor dapat memiliki beberapa edge JTM. Ledger tetap
++                # menyimpan tiap edge untuk audit, tetapi kebutuhan TM-4X BOQ
++                # hanya satu per tiang fisik per status kerja.
++                dedup_key = (
++                    canonical,
++                    str(status or "").strip().casefold(),
++                    _physical_pole_identity(rec),
++                )
++            elif identity_text.startswith("edge:"):
+                 # Edge baru sudah memuat koordinat sumber dan tujuan. Edge v260
+                 # memuat tujuan saja, tetapi tetap aman untuk menggabungkan
+                 # salinan Tiang/Gardu pada proyek dan status yang sama.
+--- a/construction_display.py
++++ b/construction_display.py
+@@ -57,13 +57,14 @@
+         canonicalize as canonicalize_construction, gardu_kind, get_record,
+     )
+     from .boq_rules import initial_pull_entries, pull_edge_uuid
+-    from . import stage_model
++    from . import stage_model, underbuild_termination
+ except Exception:  # dijalankan sebagai modul top-level (tes/exporter)
+     from construction_catalog import (
+         canonicalize as canonicalize_construction, gardu_kind, get_record,
+     )
+     from boq_rules import initial_pull_entries, pull_edge_uuid
+     import stage_model
++    import underbuild_termination
+ 
+ #: Sufiks kategori rekap untuk tiang yang membawa Gardu Cantol.
+ GARDU_CANTOL_LABEL = "Gardu Cantol"
+@@ -306,13 +307,29 @@
+ 
+ 
+ def pole_key(row):
+-    """Identitas satu tiang untuk deduplikasi ledger."""
++    """Identitas fisik satu tiang, termasuk scope proyek/lokasinya.
++
++    ``id_tiang`` dapat berulang di dua Lokasi Proyek yang berdekatan. UUID
++    tetap identitas utama, tetapi data lama tanpa UUID wajib dibatasi oleh
++    proyek + lokasi agar ``TS-002`` di lokasi A tidak melebur dengan lokasi B.
++    """
+     row = dict(row or {})
+-    return (
+-        clean(row.get("feature_uuid"))
+-        or clean(row.get("id_tiang"))
+-        or "FID:{}".format(row.get("fid"))
++    project = clean(row.get("project_key") or row.get("id_proyek")).casefold()
++    location = clean(
++        row.get("id_lokasi") or row.get("lokasi_proyek")
++    ).casefold()
++    uuid = clean(
++        row.get("feature_uuid") or row.get("uuid_objek_feature")
+     ).casefold()
++    pole_id = clean(row.get("id_tiang") or row.get("id")).casefold()
++    if uuid:
++        # Pertahankan kontrak lama: UUID dikembalikan apa adanya.
++        return uuid
++    if pole_id:
++        if not project and not location:
++            return pole_id
++        return ("legacy", project, location, pole_id)
++    return ("fid", project, location, str(row.get("fid")))
+ 
+ 
+ def _connection_matches_pole(connection, row):
+@@ -408,8 +425,10 @@
+     has_endpoint_connections = any(
+         isinstance(value, dict) for value in edge_stages.values()
+     )
+-    entries = []
+-    seen = set()
++    # Hasil dikumpulkan per TIANG FISIK, bukan per feature/edge ledger. Ini
++    # penting untuk proyek lama yang mempunyai salinan row anchor atau dua
++    # segmen JTM yang sama-sama menempel pada satu TS: TM-4X tetap satu.
++    by_pole = {}
+     for row in poles or ():
+         row = dict(row or {})
+         has_cantol = pole_has_gardu_cantol(row, owner_keys)
+@@ -419,15 +438,52 @@
+             pulls = [("utama", row.get("konstruksi"), "", "")]
+         # Produksi memakai indeks endpoint lengkap. Membership tahap berasal
+         # dari hubungan tiang ↔ jaringan saat ini, bukan dari ledger lama.
+-        row_connected = any(
++        connections = [
++            connection
++            for connection in edge_stages.values()
++            if (
+             isinstance(connection, dict)
+             and stage_model.normalize_stage(connection.get("stage")) == wanted
+             and _connection_matches_pole(connection, row)
+-            for connection in edge_stages.values()
+-        ) if has_endpoint_connections else False
++            )
++        ] if has_endpoint_connections else []
++        row_connected = bool(connections)
++
++        bucket = by_pole.setdefault(identity, {
++            "tm4x": False, "tr3": 0, "cantol": False,
++        })
++        bucket["cantol"] = bool(bucket["cantol"] or has_cantol)
++
++        # Produksi baru: topologi jaringan adalah sumber kebenaran. TM-4X
++        # adalah satu konstruksi anchor per tiang fisik, berapa pun jumlah edge
++        # JTM yang menempel. Field ``has_jtm`` diisi indeks plugin; bila data
++        # caller lama belum membawanya, ledger tetap menjadi fallback.
++        if connections:
++            has_jtm_connection = any(
++                bool(connection.get("has_jtm"))
++                for connection in connections
++            )
++            has_tm4x_evidence = any(
++                canonical(code) == "TM-4X"
++                for _part, code, _status, _ledger in pulls
++            ) or canonical(row.get("konstruksi")) == "TM-4X"
++            if has_jtm_connection or has_tm4x_evidence:
++                bucket["tm4x"] = True
++
++            # TR-3 bukan tarikan-awal per edge. Hitung hanya jalur underbuild
++            # yang BERAKHIR pada anchor ini: satu route tembus (dua segmen)
++            # bernilai nol, dua route berbeda yang berakhir bernilai dua.
++            bucket["tr3"] = max(
++                int(bucket["tr3"] or 0),
++                underbuild_termination.termination_count(
++                    underbuild_termination.pole_identity(row),
++                    connections, minimum=0,
++                ),
++            )
++
+         for bucket, code, status, ledger_id in pulls:
+             base = canonical(code)
+-            if not counts_on_existing_pole(base):
++            if base != "TM-4X":
+                 continue
+             if has_endpoint_connections:
+                 connected = row_connected
+@@ -444,11 +500,16 @@
+                     )
+             if not connected:
+                 continue
+-            key = (identity, base)
+-            if key in seen:
+-                continue
+-            seen.add(key)
+-            entries.append(construction_entry(base, has_cantol, 1))
+-            # Beberapa segmen pada satu tahap tetap satu TM-4X untuk tiang ini.
++            by_pole[identity]["tm4x"] = True
+             break
++    entries = []
++    for values in by_pole.values():
++        if values["tm4x"]:
++            entries.append(construction_entry(
++                "TM-4X", values["cantol"], 1
++            ))
++        if values["tr3"]:
++            entries.append(construction_entry(
++                "TR-3", False, values["tr3"]
++            ))
+     return entries
+--- a/metadata.txt
++++ b/metadata.txt
+@@ -1,10 +1,10 @@
+ [general]
+-name=SIGAMON v6.17.18 Gambar, Analisis, dan Monitoring Jaringan
++name=SIGAMON v6.17.19 Gambar, Analisis, dan Monitoring Jaringan
+ qgisMinimumVersion=3.0
+ author=SIGAMON — UP2K Sulawesi Utara
+ email=
+-version=6.17.18
+-changelog=v6.17.18: Memperbaiki kebocoran TM-4X dan kegagalan Tambah Underbuild pada lokasi berdekatan. Tool kini mewarisi Lokasi Proyek F11 yang sudah diterapkan, memfilter jaringan dengan id_lokasi, dan menempelkan node tiang hanya melalui endpoint UUID/scope yang sah—bukan jarak terdekat saja. UUID identik tetap mendukung metadata lokasi lama yang kosong; ID TS-xxx tidak boleh menyeberang ke id_lokasi lain. Indeks BOQ TM-4X membawa id_proyek/id_lokasi sehingga satu tiang eksisting tidak terhitung dari lokasi tetangga. Lihat AUDIT_v6.17.18.md.
++version=6.17.19
++changelog=v6.17.19: Memperbaiki BOQ tiang eksisting secara topologis. TM-4X kini dideduplikasi satu kali per tiang fisik, tahap, dan Lokasi Proyek walaupun beberapa edge menempel. TR-3 underbuild pada tiang eksisting dihitung dari terminasi route aktif: satu route berakhir = satu TR-3, route tembus = nol, dan dua route berakhir = dua. UUID endpoint tetap utama dan ID legacy tidak boleh menyeberang lokasi. Lihat AUDIT_v6.17.19.md.
+     v6.17.17: Tambah/Hapus Underbuild kini memperlakukan TIANG_EKSISTING sebagai node topologi bersama pada Rencana Awal, Rencana Akhir, dan Realisasi. Pemilihan serta penulisan konstruksi memakai scope Judul Proyek/Lokasi Proyek dan endpoint UUID-first; ID hanya fallback data lama. TM-4X utama dan TR-3 bawah dapat tersimpan bersama pada satu tiang eksisting dalam transaksi yang sama, termasuk terminasi ganda. Tiang eksisting tidak disalin ke layer tahap. Jarak (m) manual tetap satu sumber untuk gawang utama/underbuild. Lihat AUDIT_v6.17.17.md.
+     v6.17.16: Renderer JARINGAN_EKSISTING kini mengikuti warna tipe yang sama dengan Realisasi: JTM/SUTM merah solid, JTR/SUTR biru solid, dan underbuild merah-biru solid sejajar. Renderer tunggal ungu dihapus. Perubahan hanya pada penyajian; geometri, panjang, konstruksi, label, BOQ, dan data jaringan tidak berubah.
+     v6.17.15: Hitung Ulang Konstruksi kini selalu memindai TIANG_EKSISTING meski belum memiliki cache tarikan awal. JTM yang berujung pada tiang eksisting menghasilkan TM-4X; bila bentang tersebut underbuild, tiang eksisting yang sama mendapat TR-3 pada konstruksi bawah, bukan TR-3 pada tiang rencana tetangga. Gardu dan JTR biasa tetap mempertahankan aturan TR-7. Pembacaan memakai endpoint UUID/ID plus verifikasi posisi fisik.
+--- a/plugin.py
++++ b/plugin.py
+@@ -417,7 +417,7 @@
+             return None
+ 
+ # Versi plugin untuk ditampilkan kecil pada header panel (informasi saja).
+-PLN_TOOLS_VERSION = "v6.17.18"
++PLN_TOOLS_VERSION = "v6.17.19"
+ DXF_LAST_EXPORT_FOLDER_KEY = "PLNTools/dxf_last_export_folder"
+ PREVIEW_LAST_EXPORT_FOLDER_KEY = "PLNTools/preview_last_export_folder"
+ 
+@@ -68947,16 +68947,74 @@
+                         edge_identity = edge_uuid or edge_id or "FID:{}:{}".format(
+                             str(layer.id()), int(feature.id())
+                         )
+-                        selected_work_network_endpoint_rows.append({
+-                            "status": status_data,
++                        selected_work_network_endpoint_rows.append({
++                            "status": status_data,
+                             "layer": layer,
+                             "feature": feature,
+                             "endpoints": endpoint_points,
+                             "has_jtm": bool(has_jtm),
+                             "has_jtr": bool(has_jtr),
+-                            "is_under": bool(is_under),
+-                            "edge_identity": edge_identity,
+-                        })
++                            "is_under": bool(is_under),
++                            "edge_identity": edge_identity,
++                            "feature_uuid": edge_uuid,
++                            "fid": int(feature.id()),
++                            "id_jalur": self._feature_attr(
++                                layer, feature, "id_jalur", ""
++                            ),
++                            "underbuild_path_id": self._feature_attr(
++                                layer, feature, "underbuild_path_id", ""
++                            ),
++                            "status_underbuild": self._feature_attr(
++                                layer, feature, "status_underbuild", ""
++                            ),
++                            "jenis_jaringan": self._feature_attr(
++                                layer, feature,
++                                ("jenis_jaringan", "tipe_jaringan"), ""
++                            ),
++                            "jaringan_bawah": self._feature_attr(
++                                layer, feature, "jaringan_bawah", ""
++                            ),
++                            "from_feature_uuid": self._feature_attr(
++                                layer, feature, FROM_UUID_FIELD, ""
++                            ),
++                            "to_feature_uuid": self._feature_attr(
++                                layer, feature, TO_UUID_FIELD, ""
++                            ),
++                            "dari_tiang": self._feature_attr(
++                                layer, feature, "dari_tiang", ""
++                            ),
++                            "ke_tiang": self._feature_attr(
++                                layer, feature, "ke_tiang", ""
++                            ),
++                            "endpoint_uuids": tuple(
++                                value for value in (
++                                    self._feature_attr(
++                                        layer, feature,
++                                        FROM_UUID_FIELD, ""
++                                    ),
++                                    self._feature_attr(
++                                        layer, feature,
++                                        TO_UUID_FIELD, ""
++                                    ),
++                                ) if str(value or "").strip()
++                            ),
++                            "endpoint_ids": tuple(
++                                value for value in (
++                                    self._feature_attr(
++                                        layer, feature, "dari_tiang", ""
++                                    ),
++                                    self._feature_attr(
++                                        layer, feature, "ke_tiang", ""
++                                    ),
++                                ) if str(value or "").strip()
++                            ),
++                            "project_key": context.get("project_key", ""),
++                            "id_proyek": context.get("id_proyek", ""),
++                            "id_lokasi": context.get("id_lokasi", ""),
++                            "lokasi_proyek": context.get(
++                                "lokasi_proyek", ""
++                            ),
++                        })
+                 record = self._boq_check_record(
+                     layer, feature, object_type, status_data, context=context
+                 )
+@@ -69044,7 +69102,64 @@
+                         ),
+                     })
+ 
+-        self._boq_debug_flush(
++        # TR-3 pada TIANG_EKSISTING diturunkan dari topologi jaringan kerja
++        # TERPILIH, bukan dari status fisik tiangnya. Slot pada aset eksisting
++        # tidak membawa Rencana Awal/Akhir/Realisasi dan karena itu tidak cukup
++        # untuk BOQ per tahap. Satu route underbuild yang berakhir = satu TR-3;
++        # route yang hanya melintas (dua segmen route sama) = nol.
++        existing_underbuild_records = []
++        underbuild_by_pole_status = {}
++        underbuild_record_templates = {}
++        for _layer, _feature, object_type, status_data, record in selected_features:
++            if object_type != "Tiang" or status_data != "Eksisting":
++                continue
++            pole_identity = pln_underbuild.pole_identity({
++                "feature_uuid": record.get("feature_uuid"),
++                "id_tiang": record.get("id"),
++            })
++            if not pole_identity:
++                continue
++            physical_key = pln_construction_display.pole_key(record)
++            for work_status in ("Rencana", "Aktual"):
++                if requested_mode and work_status != requested_mode:
++                    continue
++                connections = [
++                    row for row in selected_work_network_endpoint_rows
++                    if row.get("status") == work_status
++                    and pln_construction_display._connection_matches_pole(
++                        row, record
++                    )
++                ]
++                count = pln_underbuild.termination_count(
++                    pole_identity, connections, minimum=0
++                )
++                if count <= 0:
++                    continue
++                key = (physical_key, work_status)
++                underbuild_by_pole_status[key] = max(
++                    int(underbuild_by_pole_status.get(key, 0)), int(count)
++                )
++                template = dict(record)
++                template["status_data"] = work_status
++                template["konstruksi"] = ""
++                template["konstruksi_atas"] = ""
++                template["konstruksi_bawah"] = ""
++                template["tarikan_awal_rekap"] = ""
++                for index in range(1, 5):
++                    template["konstruksi_bawah_{}".format(index)] = ""
++                underbuild_record_templates[key] = template
++        for key, count in underbuild_by_pole_status.items():
++            template = underbuild_record_templates.get(key)
++            if not isinstance(template, dict):
++                continue
++            for index in range(1, min(4, int(count)) + 1):
++                template["konstruksi_bawah_{}".format(index)] = "TR-3"
++            template["konstruksi_bawah"] = " ".join(
++                ["TR-3"] * min(4, int(count))
++            )
++            existing_underbuild_records.append(template)
++
++        self._boq_debug_flush(
+             requested_locations, requested_mode, debug_rows, debug_scanned
+         )
+ 
+@@ -69099,7 +69214,7 @@
+ 
+         construction_tm = {}
+         construction_tr = {}
+-        construction_records = list(records)
++        construction_records = list(records) + existing_underbuild_records
+         construction_occurrences = list(
+             boq_deduplicated_construction_type_occurrences(
+                 construction_records
+@@ -84311,11 +84426,14 @@
+                     layer_name.split("_", 1)[1]
+                 ):
+                     continue
+-                for values in self._stage_read_rows(
+-                    layer, stage,
+-                    ("feature_uuid", FROM_UUID_FIELD, TO_UUID_FIELD,
+-                     "dari_tiang", "ke_tiang", "tahap_data", "status_data",
+-                     "id_lokasi", "lokasi_proyek", "id_proyek"),
++                for values in self._stage_read_rows(
++                    layer, stage,
++                    ("feature_uuid", FROM_UUID_FIELD, TO_UUID_FIELD,
++                     "dari_tiang", "ke_tiang", "tahap_data", "status_data",
++                     "id_lokasi", "lokasi_proyek", "id_proyek", "id_jalur",
++                     "underbuild_path_id", "status_underbuild",
++                     "jenis_jaringan", "tipe_jaringan", "jaringan_bawah",
++                     "konstruksi_bawah"),
+                     location_id, location_name, name_as_alternative=True,
+                 ):
+                     identifier = pln_stage.clean(
+@@ -84339,12 +84457,43 @@
+                                 )
+                                 if pln_stage.clean(values.get(name))
+                             ),
+-                            "endpoint_ids": tuple(
++                            "endpoint_ids": tuple(
+                                 pln_stage.clean(values.get(name))
+                                 for name in ("dari_tiang", "ke_tiang")
+-                                if pln_stage.clean(values.get(name))
+-                            ),
+-                        }
++                                if pln_stage.clean(values.get(name))
++                            ),
++                            # Bentuk mentah dipertahankan agar evaluator
++                            # terminasi underbuild dapat menghitung degree per
++                            # route pada tiang eksisting yang sama.
++                            "feature_uuid": values.get("feature_uuid"),
++                            "from_feature_uuid": values.get(
++                                FROM_UUID_FIELD.casefold()
++                            ),
++                            "to_feature_uuid": values.get(
++                                TO_UUID_FIELD.casefold()
++                            ),
++                            "dari_tiang": values.get("dari_tiang"),
++                            "ke_tiang": values.get("ke_tiang"),
++                            "id_jalur": values.get("id_jalur"),
++                            "underbuild_path_id": values.get(
++                                "underbuild_path_id"
++                            ),
++                            "status_underbuild": values.get(
++                                "status_underbuild"
++                            ),
++                            "jenis_jaringan": values.get("jenis_jaringan"),
++                            "tipe_jaringan": values.get("tipe_jaringan"),
++                            "jaringan_bawah": values.get("jaringan_bawah"),
++                            "konstruksi_bawah": values.get(
++                                "konstruksi_bawah"
++                            ),
++                            "has_jtm": _pln_network_length_segment_flags(
++                                values.get("jenis_jaringan"), "",
++                                values.get("jaringan_bawah"),
++                                values.get("status_underbuild"),
++                                values.get("konstruksi_bawah"),
++                            )[0],
++                        }
+         return result
+ 
+     def stage_existing_anchor_constructions(self, stage, location_id="",
+--- a/tests/test_boq_rules.py
++++ b/tests/test_boq_rules.py
+@@ -129,6 +129,33 @@
+         rows = list(deduplicated_construction_occurrences([gardu1, gardu2]))
+         self.assertEqual(len(rows), 2)
+ 
++    def test_tm4x_is_one_per_physical_existing_pole_not_per_edge(self):
++        tiang = {
++            "object_type": "tiang", "status_data": "Eksisting",
++            "feature_uuid": "POLE-1", "id_lokasi": "LOC-A",
++            "tarikan_awal_rekap": ";".join((
++                "Rencana|utama|TM-4X|('EDGE3','L','E1','FROM')|TM-4X",
++                "Rencana|utama|TM-4X|('EDGE3','L','E2','FROM')|TM-4X",
++            )),
++        }
++        rows = list(deduplicated_construction_occurrences([tiang]))
++        self.assertEqual(1, sum(1 for row in rows if row[2] == "TM-4X"))
++
++    def test_same_legacy_pole_id_in_two_locations_remains_two_tm4x(self):
++        records = []
++        for location, edge in (("LOC-A", "E1"), ("LOC-B", "E2")):
++            records.append({
++                "object_type": "tiang", "status_data": "Eksisting",
++                "id": "TS-002", "id_proyek": "P26",
++                "id_lokasi": location,
++                "tarikan_awal_rekap": (
++                    "Rencana|utama|TM-4X|"
++                    "('EDGE3','L','{}','FROM')|TM-4X".format(edge)
++                ),
++            })
++        rows = list(deduplicated_construction_occurrences(records))
++        self.assertEqual(2, sum(1 for row in rows if row[2] == "TM-4X"))
++
+     def test_repeated_call_is_idempotent(self):
+         # Calling the generator-backed function twice on the same input list
+         # must yield the same result both times (guards against accidental
+--- a/tests/test_existing_pole_stage_connectivity.py
++++ b/tests/test_existing_pole_stage_connectivity.py
+@@ -32,6 +32,22 @@
+     }
+ 
+ 
++def underbuild_connection(target_stage, edge_uuid, route, uuids=(), ids=()):
++    row = connection(target_stage, uuids, ids)
++    row.update({
++        "feature_uuid": edge_uuid,
++        "id_jalur": route,
++        "status_underbuild": "Ya",
++        "jenis_jaringan": "JTM + JTR UNDERBUILD",
++        "from_feature_uuid": uuids[0] if uuids else "",
++        "to_feature_uuid": "OTHER-{}".format(edge_uuid),
++        "dari_tiang": ids[0] if ids else "",
++        "ke_tiang": "OTHER-{}".format(edge_uuid),
++        "has_jtm": True,
++    })
++    return row
++
++
+ def scoped_connection(target_stage, location, uuids=(), ids=()):
+     row = connection(target_stage, uuids, ids)
+     row.update({
+@@ -148,6 +164,54 @@
+             [wrong], stage.STAGE_RENCANA_AKHIR, links
+         ))
+ 
++    def test_underbuild_termination_on_existing_pole_adds_tr3(self):
++        poles = [pole("P1", "TS-002", ("U1",))]
++        links = {"u1": underbuild_connection(
++            stage.STAGE_RENCANA_AKHIR, "U1", "ROUTE-A", ("P1",),
++            ("TS-002",),
++        )}
++        rows = display.existing_pole_constructions(
++            poles, stage.STAGE_RENCANA_AKHIR, links
++        )
++        counts = {row["base"]: row["jumlah"] for row in rows}
++        self.assertEqual(1, counts["TM-4X"])
++        self.assertEqual(1, counts["TR-3"])
++
++    def test_same_underbuild_route_passing_through_has_no_tr3(self):
++        poles = [pole("P1", "TS-002", ("U1", "U2"))]
++        first = underbuild_connection(
++            stage.STAGE_RENCANA_AKHIR, "U1", "ROUTE-A", ("P1",),
++            ("TS-002",),
++        )
++        second = underbuild_connection(
++            stage.STAGE_RENCANA_AKHIR, "U2", "ROUTE-A", ("P1",),
++            ("TS-002",),
++        )
++        rows = display.existing_pole_constructions(
++            poles, stage.STAGE_RENCANA_AKHIR,
++            {"u1": first, "u2": second},
++        )
++        self.assertEqual([], [row for row in rows if row["base"] == "TR-3"])
++
++    def test_two_underbuild_routes_ending_on_existing_pole_add_two_tr3(self):
++        poles = [pole("P1", "TS-002", ("U1", "U2"))]
++        links = {
++            "u1": underbuild_connection(
++                stage.STAGE_RENCANA_AKHIR, "U1", "ROUTE-A", ("P1",),
++                ("TS-002",),
++            ),
++            "u2": underbuild_connection(
++                stage.STAGE_RENCANA_AKHIR, "U2", "ROUTE-B", ("P1",),
++                ("TS-002",),
++            ),
++        }
++        rows = display.existing_pole_constructions(
++            poles, stage.STAGE_RENCANA_AKHIR, links
++        )
++        self.assertEqual(
++            2, next(row["jumlah"] for row in rows if row["base"] == "TR-3")
++        )
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
+--- a/tests/test_existing_underbuild_nodes.py
++++ b/tests/test_existing_underbuild_nodes.py
+@@ -75,6 +75,13 @@
+         self.assertIn("project_location_ids_for_name", block)
+         self.assertIn("feature_location_id", block)
+ 
++    def test_boq_infers_existing_tr3_from_route_termination(self):
++        source = method_source(self.source, "calculate_boq_check_for_location")
++        self.assertIn("existing_underbuild_records", source)
++        self.assertIn("pln_underbuild.termination_count", source)
++        self.assertIn("pln_construction_display._connection_matches_pole", source)
++        self.assertIn("list(records) + existing_underbuild_records", source)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
+--- /dev/null
++++ b/AUDIT_v6.17.19.md
+@@ -0,0 +1,34 @@
++# Audit SIGAMON v6.17.19
++
++## Masalah
++
++1. Ledger menyimpan satu TM-4X untuk setiap edge. BOQ memakai identitas edge,
++   sehingga dua edge pada satu tiang eksisting menghasilkan TM-4X dua kali.
++2. TR-3 bukan anggota ledger tarikan awal (`TM-4X`/`TR-7`). Tahap pekerjaan
++   juga tidak dapat diturunkan dari status fisik tiang eksisting, sehingga
++   terminasi underbuild Rencana Akhir dapat hilang dari BOQ.
++3. ID seperti `TS-002` dapat berulang pada Lokasi Proyek berdekatan.
++
++## Perbaikan
++
++- Deduplikasi TM-4X memakai identitas tiang fisik. UUID menjadi kunci utama;
++  fallback lama memakai Judul Proyek + Lokasi Proyek + ID tiang.
++- Indeks jaringan per tahap membawa endpoint UUID/ID, route
++  (`id_jalur`/`underbuild_path_id`), status underbuild, dan scope lokasi.
++- TR-3 pada existing dihitung dari degree per route: satu segmen route yang
++  menempel adalah terminasi; dua segmen route yang sama adalah lintasan; dua
++  route berbeda yang berakhir menghasilkan dua TR-3.
++- BOQ fullscreen membentuk record TR-3 sementara per status kerja dari
++  topologi terpilih. Pembacaan ini tidak memutasi data QGIS.
++- Konflik project/id_lokasi ditolak; kedekatan geometri tidak menggantikan
++  identitas endpoint.
++
++## Batas Perubahan
++
++Tidak ada perubahan pada rumus kabel, sagging, jarak input, jumlah tiang
++fisik, koordinat, spreadsheet, DXF, Preview Maps, ataupun filter F11.
++
++## Verifikasi
++
++- Test fokus BOQ/TM-4X/underbuild: 163 lulus.
++- Regression penuh: 3.462 lulus, 6 dilewati, 0 gagal.
+--- /dev/null
++++ b/TEST_MATRIX_v6.17.19.md
+@@ -0,0 +1,13 @@
++# Test Matrix SIGAMON v6.17.19
++
++| Skenario | Expected | Hasil |
++|---|---|---|
++| Satu existing, dua edge JTM | TM-4X = 1 | Lulus |
++| ID existing sama, lokasi berbeda | Masing-masing lokasi tetap terpisah | Lulus |
++| UUID cocok, id_lokasi konflik | Koneksi ditolak | Lulus |
++| Satu route underbuild berakhir di existing | TR-3 = 1 | Lulus |
++| Route underbuild sama melintas existing | TR-3 = 0 | Lulus |
++| Dua route underbuild berakhir di existing | TR-3 = 2 | Lulus |
++| Rencana Awal/Akhir/Realisasi | Tahap berasal dari jaringan | Lulus |
++| Jumlah tiang fisik | Tidak berubah | Lulus |
++| Regression penuh | 3.462 lulus, 6 dilewati, 0 gagal | Lulus |
