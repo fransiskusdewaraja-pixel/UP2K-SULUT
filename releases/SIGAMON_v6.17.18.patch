@@ -1,0 +1,563 @@
+diff -ruN SIGAMON_v6.17.17/AUDIT_v6.17.18.md SIGAMON_v6.17.18/AUDIT_v6.17.18.md
+--- SIGAMON_v6.17.17/AUDIT_v6.17.18.md	1970-01-01 09:00:00.000000000 +0900
++++ SIGAMON_v6.17.18/AUDIT_v6.17.18.md	2026-09-11 16:26:40.000000000 +0900
+@@ -0,0 +1,41 @@
++# Audit SIGAMON v6.17.18
++
++## Akar masalah
++
++1. `Tools > Tambah Underbuild` yang dibuka dari canvas utama membuat adapter
++   lokasi dengan nilai bawaan `Semua lokasi proyek`. Dua jaringan dari Lokasi
++   Proyek berdekatan dapat masuk graph yang sama walaupun F11 sedang menampilkan
++   satu lokasi.
++2. Label/kandidat tiang ditempelkan ke node jaringan terdekat berdasarkan
++   geometri. Tiang eksisting lokasi tetangga dapat terlihat sebagai kandidat.
++3. Fallback endpoint lama memakai `id_tiang` seperti `TS-002` tanpa membawa
++   `id_lokasi`. ID tersebut sah berulang pada Lokasi Proyek berbeda sehingga
++   TM-4X dari lokasi tetangga dapat ikut dihitung.
++
++## Perbaikan
++
++- Tambah Underbuild mewarisi Lokasi Proyek F11 yang sudah diterapkan.
++- Penyaringan jaringan mendahulukan `id_lokasi`; nama hanya fallback data lama.
++- Setiap node graph menyimpan pasangan endpoint UUID/ID dan scope jaringan.
++- Tiang/gardu hanya ditempelkan pada node bila identitas endpoint dan scope
++  cocok. Kedekatan geometri hanya verifikasi posisi, bukan identitas.
++- UUID endpoint yang sama tetap dapat mengenali tiang lama yang metadata
++  lokasinya kosong, tetapi konflik `id_proyek` atau `id_lokasi` selalu ditolak.
++- Fallback `id_tiang` diwajibkan berada pada Lokasi Proyek yang sama.
++- Indeks koneksi BOQ TM-4X kini membawa `id_proyek`, `id_lokasi`, dan
++  `lokasi_proyek` untuk mencegah hitungan lintas lokasi.
++
++## Perilaku yang dipertahankan
++
++- Rencana Awal, Rencana Akhir, dan Realisasi tetap dapat memakai
++  `TIANG_EKSISTING` tanpa membuat salinan tiang.
++- TM-4X utama dan TR-3 underbuild tetap dapat berada pada tiang yang sama.
++- `Jarak (m)` manual tetap menjadi satu nilai bersama untuk gawang utama dan
++  underbuild.
++- BOQ, Spreadsheet, DXF, Preview Maps, geometri, dan aturan material lainnya
++  tidak diubah.
++
++## Verifikasi
++
++- Tes fokus TM-4X/underbuild/lokasi/jarak: 173 lulus.
++- Regression penuh: 3.456 lulus, 6 dilewati, 0 gagal.
+diff -ruN SIGAMON_v6.17.17/CLAUDE.md SIGAMON_v6.17.18/CLAUDE.md
+--- SIGAMON_v6.17.17/CLAUDE.md	2026-09-10 23:16:28.000000000 +0900
++++ SIGAMON_v6.17.18/CLAUDE.md	2026-09-11 16:26:40.000000000 +0900
+@@ -1,4 +1,4 @@
+-# SIGAMON v6.17.17
++# SIGAMON v6.17.18
+ 
+ Workspace pengembangan plugin QGIS SIGAMON. Judul Proyek adalah batas data
+ tertinggi: dua Judul Proyek tetap dua dataset walaupun desa, nama Lokasi
+diff -ruN SIGAMON_v6.17.17/README.txt SIGAMON_v6.17.18/README.txt
+--- SIGAMON_v6.17.17/README.txt	2026-09-10 23:16:28.000000000 +0900
++++ SIGAMON_v6.17.18/README.txt	2026-09-11 16:26:38.000000000 +0900
+@@ -1,4 +1,6 @@
+-SIGAMON v6.17.17
++SIGAMON v6.17.18
++Lihat AUDIT_v6.17.18.md untuk isolasi TM-4X dan Tambah Underbuild pada
++Lokasi Proyek yang berdekatan.
+ Lihat AUDIT_v6.17.17.md untuk dukungan underbuild pada TIANG_EKSISTING di
+ Rencana Awal, Rencana Akhir, dan Realisasi.
+ Lihat AUDIT_v6.17.16.md untuk warna merah/biru solid jaringan eksisting.
+diff -ruN SIGAMON_v6.17.17/TEST_MATRIX_v6.17.18.md SIGAMON_v6.17.18/TEST_MATRIX_v6.17.18.md
+--- SIGAMON_v6.17.17/TEST_MATRIX_v6.17.18.md	1970-01-01 09:00:00.000000000 +0900
++++ SIGAMON_v6.17.18/TEST_MATRIX_v6.17.18.md	2026-09-11 16:26:42.000000000 +0900
+@@ -0,0 +1,15 @@
++# Test Matrix SIGAMON v6.17.18
++
++| Skenario | Expected | Hasil |
++|---|---|---|
++| Dua lokasi berdekatan dalam desa sama | Graph dan BOQ tetap terpisah | Lulus |
++| ID `TS-002` sama pada dua lokasi | Hanya lokasi aktif dihitung | Lulus |
++| UUID sama tetapi `id_lokasi` konflik | Ditolak | Lulus |
++| UUID benar, metadata lokasi legacy kosong | Tiang existing tetap dikenali | Lulus |
++| Tambah Underbuild Rencana Akhir | Tiang existing dapat dipilih/diperbarui | Lulus |
++| Rencana Awal dan Realisasi | Aturan node existing tetap sama | Lulus |
++| TM-4X pada BOQ | Satu tiang = satu TM-4X per tahap/lokasi | Lulus |
++| TM-4X + TR-3 pada satu existing | Tidak saling menimpa | Lulus |
++| Hapus Underbuild | TR-3 terkait dibersihkan, TM aktif tetap | Lulus |
++| Jarak manual | Nilai `Jarak (m)` bersama tetap dipakai | Lulus |
++| Regression penuh | 3.456 lulus, 6 dilewati, 0 gagal | Lulus |
+diff -ruN SIGAMON_v6.17.17/construction_display.py SIGAMON_v6.17.18/construction_display.py
+--- SIGAMON_v6.17.17/construction_display.py	2026-09-08 22:09:30.000000000 +0900
++++ SIGAMON_v6.17.18/construction_display.py	2026-09-11 14:27:16.000000000 +0900
+@@ -335,9 +335,40 @@
+         clean(value).casefold() for value in connection.get("endpoint_ids", ())
+         if clean(value)
+     }
++    connection_project = clean(
++        connection.get("project_key") or connection.get("id_proyek")
++    ).casefold()
++    pole_project = clean(
++        row.get("project_key") or row.get("id_proyek")
++    ).casefold()
++    if (connection_project and pole_project
++            and connection_project != pole_project):
++        return False
++    connection_location = clean(connection.get("id_lokasi")).casefold()
++    pole_location = clean(row.get("id_lokasi")).casefold()
++    if (connection_location and pole_location
++            and connection_location != pole_location):
++        return False
+     if pole_uuid and endpoint_uuids:
+         return pole_uuid in endpoint_uuids
+-    return bool(pole_id and pole_id in endpoint_ids)
++    if not (pole_id and pole_id in endpoint_ids):
++        return False
++    # ID tampilan dapat berulang per Lokasi Proyek. Bila salah satu sisi tidak
++    # memiliki id_lokasi, fallback hanya aman ketika nama Lokasi Proyeknya
++    # tersedia dan sama; nama Desa tidak pernah menjadi identitas pengganti.
++    if connection_location and pole_location:
++        return True
++    connection_name = clean(connection.get("lokasi_proyek")).casefold()
++    pole_name = clean(row.get("lokasi_proyek")).casefold()
++    if connection_name or pole_name:
++        return bool(
++            connection_name and pole_name
++            and connection_name == pole_name
++        )
++    # Pemanggil legacy QGIS-free dapat belum membawa metadata lokasi pada
++    # kedua sisi. Dalam keadaan benar-benar sama-sama kosong, deduplikasi
++    # pole_key tetap memastikan satu ID hanya dihitung satu kali.
++    return not connection_location and not pole_location
+ 
+ 
+ def existing_pole_constructions(poles, stage, edge_stages=None,
+diff -ruN SIGAMON_v6.17.17/metadata.txt SIGAMON_v6.17.18/metadata.txt
+--- SIGAMON_v6.17.17/metadata.txt	2026-09-10 23:16:26.000000000 +0900
++++ SIGAMON_v6.17.18/metadata.txt	2026-09-11 16:26:38.000000000 +0900
+@@ -1,10 +1,11 @@
+ [general]
+-name=SIGAMON v6.17.17 Gambar, Analisis, dan Monitoring Jaringan
++name=SIGAMON v6.17.18 Gambar, Analisis, dan Monitoring Jaringan
+ qgisMinimumVersion=3.0
+ author=SIGAMON — UP2K Sulawesi Utara
+ email=
+-version=6.17.17
+-changelog=v6.17.17: Tambah/Hapus Underbuild kini memperlakukan TIANG_EKSISTING sebagai node topologi bersama pada Rencana Awal, Rencana Akhir, dan Realisasi. Pemilihan serta penulisan konstruksi memakai scope Judul Proyek/Lokasi Proyek dan endpoint UUID-first; ID hanya fallback data lama. TM-4X utama dan TR-3 bawah dapat tersimpan bersama pada satu tiang eksisting dalam transaksi yang sama, termasuk terminasi ganda. Tiang eksisting tidak disalin ke layer tahap. Jarak (m) manual tetap satu sumber untuk gawang utama/underbuild. Lihat AUDIT_v6.17.17.md.
++version=6.17.18
++changelog=v6.17.18: Memperbaiki kebocoran TM-4X dan kegagalan Tambah Underbuild pada lokasi berdekatan. Tool kini mewarisi Lokasi Proyek F11 yang sudah diterapkan, memfilter jaringan dengan id_lokasi, dan menempelkan node tiang hanya melalui endpoint UUID/scope yang sah—bukan jarak terdekat saja. UUID identik tetap mendukung metadata lokasi lama yang kosong; ID TS-xxx tidak boleh menyeberang ke id_lokasi lain. Indeks BOQ TM-4X membawa id_proyek/id_lokasi sehingga satu tiang eksisting tidak terhitung dari lokasi tetangga. Lihat AUDIT_v6.17.18.md.
++    v6.17.17: Tambah/Hapus Underbuild kini memperlakukan TIANG_EKSISTING sebagai node topologi bersama pada Rencana Awal, Rencana Akhir, dan Realisasi. Pemilihan serta penulisan konstruksi memakai scope Judul Proyek/Lokasi Proyek dan endpoint UUID-first; ID hanya fallback data lama. TM-4X utama dan TR-3 bawah dapat tersimpan bersama pada satu tiang eksisting dalam transaksi yang sama, termasuk terminasi ganda. Tiang eksisting tidak disalin ke layer tahap. Jarak (m) manual tetap satu sumber untuk gawang utama/underbuild. Lihat AUDIT_v6.17.17.md.
+     v6.17.16: Renderer JARINGAN_EKSISTING kini mengikuti warna tipe yang sama dengan Realisasi: JTM/SUTM merah solid, JTR/SUTR biru solid, dan underbuild merah-biru solid sejajar. Renderer tunggal ungu dihapus. Perubahan hanya pada penyajian; geometri, panjang, konstruksi, label, BOQ, dan data jaringan tidak berubah.
+     v6.17.15: Hitung Ulang Konstruksi kini selalu memindai TIANG_EKSISTING meski belum memiliki cache tarikan awal. JTM yang berujung pada tiang eksisting menghasilkan TM-4X; bila bentang tersebut underbuild, tiang eksisting yang sama mendapat TR-3 pada konstruksi bawah, bukan TR-3 pada tiang rencana tetangga. Gardu dan JTR biasa tetap mempertahankan aturan TR-7. Pembacaan memakai endpoint UUID/ID plus verifikasi posisi fisik.
+     v6.17.14: Label jaringan kini mengutamakan manual_distance sebelum jarak_target dan langsung di-refresh setelah koreksi/reset. Pasangan jaringan utama dan underbuild dengan endpoint serta scope proyek/tahap yang sama memakai satu override jarak dan diperbarui dalam satu transaksi. Geometri tidak berubah; Detail Tarikan tetap satu kolom Jarak (m) dan read-only.
+diff -ruN SIGAMON_v6.17.17/plugin.py SIGAMON_v6.17.18/plugin.py
+--- SIGAMON_v6.17.17/plugin.py	2026-09-10 23:16:26.000000000 +0900
++++ SIGAMON_v6.17.18/plugin.py	2026-09-11 16:26:36.000000000 +0900
+@@ -417,7 +417,7 @@
+             return None
+ 
+ # Versi plugin untuk ditampilkan kecil pada header panel (informasi saja).
+-PLN_TOOLS_VERSION = "v6.17.17"
++PLN_TOOLS_VERSION = "v6.17.18"
+ DXF_LAST_EXPORT_FOLDER_KEY = "PLNTools/dxf_last_export_folder"
+ PREVIEW_LAST_EXPORT_FOLDER_KEY = "PLNTools/preview_last_export_folder"
+ 
+@@ -9734,7 +9734,7 @@
+             ok_main = False
+ 
+         dashboard = self.dashboard
+-        if dashboard is not None:
++        if dashboard is not None:
+             try:
+                 # Sinkronkan pilihan dan panel detail tanpa mengubah tab Foto Tiang.
+                 dashboard.select_object(layer, feat.id(), zoom=False)
+@@ -14672,7 +14672,11 @@
+                             return node_id
+             node_id = next_node[0]
+             next_node[0] += 1
+-            nodes[node_id] = {"point": QgsPointXY(point.x(), point.y()), "labels": [], "object_type": ""}
++            nodes[node_id] = {
++                "point": QgsPointXY(point.x(), point.y()),
++                "labels": [], "object_type": "",
++                "endpoint_pairs": set(), "scopes": [],
++            }
+             buckets.setdefault(key, []).append(node_id)
+             return node_id
+ 
+@@ -14721,8 +14725,19 @@
+                     edge["jtr"] = bool(edge.get("jtr") or has_jtr)
+                     edge["underbuild"] = bool(edge.get("underbuild") or is_under)
+                     edge["features"].append((layer, feat.id()))
+-                dari = str(self._read_attr(layer, feat, ["dari_tiang", "id_awal", "from_id"], "") or "").strip()
+-                ke = str(self._read_attr(layer, feat, ["ke_tiang", "id_akhir", "to_id"], "") or "").strip()
++                dari = str(self._read_attr(layer, feat, ["dari_tiang", "id_awal", "from_id"], "") or "").strip()
++                ke = str(self._read_attr(layer, feat, ["ke_tiang", "id_akhir", "to_id"], "") or "").strip()
++                from_uuid = str(self._read_attr(
++                    layer, feat, [FROM_UUID_FIELD], ""
++                ) or "").strip()
++                to_uuid = str(self._read_attr(
++                    layer, feat, [TO_UUID_FIELD], ""
++                ) or "").strip()
++                nodes[na]["endpoint_pairs"].add((from_uuid, dari))
++                nodes[nb]["endpoint_pairs"].add((to_uuid, ke))
++                feature_scope = self.plugin._engineering_feature_values(feat)
++                nodes[na]["scopes"].append(feature_scope)
++                nodes[nb]["scopes"].append(feature_scope)
+                 if dari and dari not in nodes[na]["labels"]:
+                     nodes[na]["labels"].append(dari)
+                 if ke and ke not in nodes[nb]["labels"]:
+@@ -14744,15 +14759,37 @@
+             if point_layer is None:
+                 continue
+             object_type = "Gardu" if "GARDU" in point_layer_name else "Tiang"
+-            for feat in point_layer.getFeatures():
+-                try:
+-                    pg = self._transform_geometry(point_layer, feat.geometry())
++            for feat in point_layer.getFeatures():
++                try:
++                    point_values = self.plugin._engineering_feature_values(
++                        feat
++                    )
++                    point_uuid = str(self._read_attr(
++                        point_layer, feat,
++                        ["tiang_uuid_ref", UUID_FIELD], ""
++                    ) or "")
++                    point_id = str(self._read_attr(
++                        point_layer, feat,
++                        ["id_tiang_ref", "id_tiang", "id_gardu"], ""
++                    ) or "")
++                    pg = self._transform_geometry(point_layer, feat.geometry())
+                     if not pg or pg.isEmpty():
+                         continue
+                     p = pg.asPoint()
+                     nearest = min(nodes, key=lambda nid: math.hypot(float(nodes[nid]["point"].x()) - float(p.x()), float(nodes[nid]["point"].y()) - float(p.y())))
+-                    dist = math.hypot(float(nodes[nearest]["point"].x()) - float(p.x()), float(nodes[nearest]["point"].y()) - float(p.y()))
+-                    if dist <= max(tolerance * 2.0, tolerance + 0.01):
++                    dist = math.hypot(float(nodes[nearest]["point"].x()) - float(p.x()), float(nodes[nearest]["point"].y()) - float(p.y()))
++                    node = nodes[nearest]
++                    identity_valid = any(
++                        pln_underbuild.endpoint_topology_matches(
++                            scope, point_values, point_uuid, point_id,
++                            node.get("endpoint_pairs", ()),
++                        )
++                        for scope in node.get("scopes", ())
++                    )
++                    if (identity_valid
++                            and dist <= max(
++                                tolerance * 2.0, tolerance + 0.01
++                            )):
+                         label = str(self.plugin._feature_object_id(point_layer, feat) or "").strip()
+                         if label and label not in nodes[nearest]["labels"]:
+                             if object_type == "Gardu":
+@@ -15301,9 +15338,20 @@
+                     dashboard._fullscreen_selected_location()
+                     or "Semua lokasi proyek"
+                 )
+-            except Exception:
+-                pass
+-        self.cbo_desa.addItem(selected_location)
++            except Exception:
++                pass
++        else:
++            # Tools > Tambah Underbuild mewarisi Lokasi Proyek F11 yang
++            # SUDAH diterapkan. Default "Semua" dahulu membuat dua lokasi
++            # berdekatan masuk satu graph dan endpoint existing tertukar.
++            try:
++                selected_location = str(
++                    plugin._pln_f11_export_selected_location()
++                    or "Semua lokasi proyek"
++                ).strip()
++            except Exception:
++                pass
++        self.cbo_desa.addItem(selected_location)
+         self.cbo_desa.setCurrentText(selected_location)
+         self.all_records = list(getattr(dashboard, "all_records", []) or [])
+         self.lbl_status = QLabel(self)
+@@ -15455,20 +15503,39 @@
+         self.layout().addWidget(self.btn_apply_underbuild)
+         self.btn_apply_underbuild.clicked.connect(self.apply_underbuild)
+ 
+-    def _allowed_network_fids(self, layer):
+-        stage = pln_stage.normalize_stage(self.cbo_data.currentText())
+-        scope = self.plugin.active_project_scope()
+-        location = self._underbuild_context._combo_text(self._underbuild_context.cbo_desa)
+-        all_locations = location.casefold() in ("", "semua lokasi proyek", "semua desa")
+-        allowed = set()
++    def _allowed_network_fids(self, layer):
++        stage = pln_stage.normalize_stage(self.cbo_data.currentText())
++        scope = self.plugin.active_project_scope()
++        location = self._underbuild_context._combo_text(self._underbuild_context.cbo_desa)
++        all_locations = location.casefold() in ("", "semua lokasi proyek", "semua desa")
++        location_ids = set()
++        if not all_locations:
++            try:
++                location_ids = {
++                    str(value).strip().casefold()
++                    for value in self.plugin.project_location_ids_for_name(
++                        location
++                    ) or ()
++                    if str(value).strip()
++                }
++            except Exception:
++                location_ids = set()
++        allowed = set()
+         for feature in layer.getFeatures():
+             values = self.plugin._engineering_feature_values(feature)
+             if values["tahap_data"] != stage:
+                 continue
+             if not pln_project_scope.row_in_scope(scope, values):
+                 continue
+-            if not all_locations and values["lokasi_proyek"].casefold() != location.casefold():
+-                continue
++            if not all_locations:
++                feature_location_id = str(
++                    values.get("id_lokasi") or ""
++                ).strip().casefold()
++                if location_ids and feature_location_id:
++                    if feature_location_id not in location_ids:
++                        continue
++                elif values["lokasi_proyek"].casefold() != location.casefold():
++                    continue
+             allowed.add(int(feature.id()))
+         return allowed, location + " | " + stage
+ 
+@@ -15659,9 +15726,6 @@
+                         point_values = self.plugin._engineering_feature_values(
+                             point
+                         )
+-                        if not pln_underbuild.same_topology_scope(
+-                                engineering_scope, point_values):
+-                            continue
+                         pole_id = str(
+                             self.plugin.get_feature_value_safe(
+                                 point, "id_tiang", ""
+@@ -15672,7 +15736,8 @@
+                                 point, UUID_FIELD, ""
+                             ) or ""
+                         ).strip()
+-                        if not pln_underbuild.endpoint_identity_matches(
++                        if not pln_underbuild.endpoint_topology_matches(
++                                engineering_scope, point_values,
+                                 pole_uuid, pole_id, endpoint_pairs):
+                             continue
+                         point_updates = {
+@@ -69185,13 +69250,13 @@
+         for point_layer in point_layers:
+             for point in point_layer.getFeatures():
+                 values = self._engineering_feature_values(point)
+-                if not pln_underbuild.same_topology_scope(scope, values):
+-                    continue
+                 if endpoint_pairs:
+-                    if not pln_underbuild.endpoint_identity_matches(
+-                            values.get(UUID_FIELD), values.get("id_tiang"),
+-                            endpoint_pairs):
++                    if not pln_underbuild.endpoint_topology_matches(
++                            scope, values, values.get(UUID_FIELD),
++                            values.get("id_tiang"), endpoint_pairs):
+                         continue
++                elif not pln_underbuild.same_topology_scope(scope, values):
++                    continue
+                 elif values["id_tiang"] not in endpoint_ids:
+                     continue
+                 keys = pln_underbuild.pole_identity(values)
+@@ -84257,8 +84322,15 @@
+                         values.get("feature_uuid")
+                     ).casefold()
+                     if identifier:
+-                        result[identifier] = {
+-                            "stage": stage,
++                        result[identifier] = {
++                            "stage": stage,
++                            "project_key": (
++                                values.get("project_key")
++                                or values.get("id_proyek")
++                            ),
++                            "id_proyek": values.get("id_proyek"),
++                            "id_lokasi": values.get("id_lokasi"),
++                            "lokasi_proyek": values.get("lokasi_proyek"),
+                             "endpoint_uuids": tuple(
+                                 pln_stage.clean(values.get(name))
+                                 for name in (
+diff -ruN SIGAMON_v6.17.17/tests/test_existing_pole_stage_connectivity.py SIGAMON_v6.17.18/tests/test_existing_pole_stage_connectivity.py
+--- SIGAMON_v6.17.17/tests/test_existing_pole_stage_connectivity.py	2026-09-10 04:34:56.000000000 +0900
++++ SIGAMON_v6.17.18/tests/test_existing_pole_stage_connectivity.py	2026-09-11 14:26:44.000000000 +0900
+@@ -32,6 +32,15 @@
+     }
+ 
+ 
++def scoped_connection(target_stage, location, uuids=(), ids=()):
++    row = connection(target_stage, uuids, ids)
++    row.update({
++        "project_key": "P26", "id_proyek": "P26",
++        "id_lokasi": location, "lokasi_proyek": "Lokasi " + location,
++    })
++    return row
++
++
+ def tm4x_count(poles, target_stage, connections):
+     rows = display.existing_pole_constructions(
+         poles, target_stage, connections
+@@ -108,6 +117,37 @@
+         for target in stage.BOQ_STAGES:
+             self.assertEqual(0, tm4x_count(poles, target, empty), target)
+ 
++    def test_duplicate_pole_id_in_neighbour_location_is_not_counted(self):
++        first = pole("", "TS-002", ("A",))
++        first.update({
++            "id_proyek": "P26", "id_lokasi": "A",
++            "lokasi_proyek": "Lokasi A",
++        })
++        neighbour = pole("", "TS-002", ("B",))
++        neighbour.update({
++            "id_proyek": "P26", "id_lokasi": "B",
++            "lokasi_proyek": "Lokasi B",
++        })
++        links = {"a": scoped_connection(
++            stage.STAGE_RENCANA_AKHIR, "A", (), ("TS-002",)
++        )}
++        self.assertEqual(1, tm4x_count(
++            [first, neighbour], stage.STAGE_RENCANA_AKHIR, links
++        ))
++
++    def test_uuid_does_not_override_an_explicit_location_conflict(self):
++        wrong = pole("P1", "TS-002", ("A",))
++        wrong.update({
++            "id_proyek": "P26", "id_lokasi": "B",
++            "lokasi_proyek": "Lokasi B",
++        })
++        links = {"a": scoped_connection(
++            stage.STAGE_RENCANA_AKHIR, "A", ("P1",), ("TS-002",)
++        )}
++        self.assertEqual(0, tm4x_count(
++            [wrong], stage.STAGE_RENCANA_AKHIR, links
++        ))
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
+diff -ruN SIGAMON_v6.17.17/tests/test_existing_underbuild_nodes.py SIGAMON_v6.17.18/tests/test_existing_underbuild_nodes.py
+--- SIGAMON_v6.17.17/tests/test_existing_underbuild_nodes.py	2026-09-10 22:58:28.000000000 +0900
++++ SIGAMON_v6.17.18/tests/test_existing_underbuild_nodes.py	2026-09-11 16:17:56.000000000 +0900
+@@ -32,8 +32,7 @@
+     def test_add_underbuild_resolves_all_topology_point_layers(self):
+         source = method_source(self.source, "apply_underbuild")
+         self.assertIn("topology_point_layers_for_stage", source)
+-        self.assertIn("same_topology_scope", source)
+-        self.assertIn("endpoint_identity_matches", source)
++        self.assertIn("endpoint_topology_matches", source)
+         self.assertIn("list(point_layers) + [network_layer]", source)
+ 
+     def test_recalculation_writes_existing_anchor_in_same_transaction(self):
+@@ -55,6 +54,27 @@
+         for forbidden in ("addFeature", "QgsFeature(", "clone", "copy"):
+             self.assertNotIn(forbidden, source)
+ 
++    def test_graph_labels_require_endpoint_identity_and_scope(self):
++        source = method_source(self.source, "_build_graph")
++        self.assertIn('"endpoint_pairs": set()', source)
++        self.assertIn("endpoint_topology_matches", source)
++        self.assertIn("identity_valid", source)
++
++    def test_tool_inherits_the_applied_f11_location(self):
++        adapter = self.source[
++            self.source.index("class UnderbuildRangeContext"):
++            self.source.index("class UnderbuildRangeDialog")
++        ]
++        self.assertIn("_pln_f11_export_selected_location", adapter)
++
++    def test_underbuild_filter_prefers_the_location_id(self):
++        block = self.source[
++            self.source.index("class UnderbuildRangeDialog"):
++        ]
++        block = block[:block.index("    def _build_graph", 1)]
++        self.assertIn("project_location_ids_for_name", block)
++        self.assertIn("feature_location_id", block)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
+diff -ruN SIGAMON_v6.17.17/tests/test_underbuild_termination.py SIGAMON_v6.17.18/tests/test_underbuild_termination.py
+--- SIGAMON_v6.17.17/tests/test_underbuild_termination.py	2026-09-10 22:58:26.000000000 +0900
++++ SIGAMON_v6.17.18/tests/test_underbuild_termination.py	2026-09-11 14:26:44.000000000 +0900
+@@ -123,6 +123,37 @@
+             "", "TM-001", {("", "TM-001")}
+         ))
+ 
++    def test_exact_uuid_recovers_missing_legacy_location_metadata(self):
++        network = self._network(stage.STAGE_RENCANA_AKHIR)
++        legacy_existing = {
++            "project_key": "P26", "id_lokasi": "",
++            "lokasi_proyek": "Desa Sama",
++            "tahap_data": stage.STAGE_EKSISTING,
++        }
++        self.assertTrue(underbuild.endpoint_topology_matches(
++            network, legacy_existing, "UUID-A", "TS-002",
++            {("UUID-A", "TS-002")},
++        ))
++
++    def test_conflicting_location_rejects_even_the_same_uuid(self):
++        network = self._network(stage.STAGE_RENCANA_AKHIR)
++        other_location = dict(
++            self._network(stage.STAGE_EKSISTING), id_lokasi="LOC-B"
++        )
++        self.assertFalse(underbuild.endpoint_topology_matches(
++            network, other_location, "UUID-A", "TS-002",
++            {("UUID-A", "TS-002")},
++        ))
++
++    def test_duplicate_legacy_id_cannot_cross_locations(self):
++        network = self._network(stage.STAGE_RENCANA_AKHIR)
++        other_location = dict(
++            self._network(stage.STAGE_EKSISTING), id_lokasi="LOC-B"
++        )
++        self.assertFalse(underbuild.endpoint_topology_matches(
++            network, other_location, "", "TS-002", {("", "TS-002")}
++        ))
++
+ 
+ class Test2TwoTerminationsTests(unittest.TestCase):
+     """TEST 2/8 — dua jalur berbeda berakhir di tiang X yang sama."""
+diff -ruN SIGAMON_v6.17.17/underbuild_termination.py SIGAMON_v6.17.18/underbuild_termination.py
+--- SIGAMON_v6.17.17/underbuild_termination.py	2026-09-10 22:52:54.000000000 +0900
++++ SIGAMON_v6.17.18/underbuild_termination.py	2026-09-11 14:25:52.000000000 +0900
+@@ -306,3 +306,45 @@
+         if pid and eid and pid == eid:
+             return True
+     return False
++
++
++def endpoint_topology_matches(network, point, point_uuid, point_id,
++                              endpoint_pairs):
++    """Endpoint valid dalam scope tahap/lokasi, dengan UUID sebagai utama.
++
++    UUID identik boleh memulihkan feature lama yang belum mempunyai metadata
++    Lokasi Proyek. Namun identitas lokasi/proyek yang sama-sama terisi dan
++    bertentangan selalu ditolak. Fallback ID hanya berlaku setelah scope
++    lokasi cocok penuh; ``TS-002`` di dua lokasi tidak pernah disamakan hanya
++    karena ID atau geometri berdekatan.
++    """
++    network, point = dict(network or {}), dict(point or {})
++    network_project = _key(network.get("project_key"))
++    point_project = _key(point.get("project_key"))
++    if network_project and point_project and network_project != point_project:
++        return False
++    network_location = _key(network.get("id_lokasi"))
++    point_location = _key(point.get("id_lokasi"))
++    if (network_location and point_location
++            and network_location != point_location):
++        return False
++    point_stage = _key(point.get("tahap_data"))
++    if not (
++        point_stage in ("eksisting", "existing")
++        or point_stage == _key(network.get("tahap_data"))
++    ):
++        return False
++
++    puid = _key(point_uuid)
++    exact_uuid = any(
++        puid and _key(endpoint_uuid) == puid
++        for endpoint_uuid, _endpoint_id in endpoint_pairs or ()
++    )
++    if exact_uuid:
++        return True
++    return bool(
++        same_topology_scope(network, point)
++        and endpoint_identity_matches(
++            point_uuid, point_id, endpoint_pairs
++        )
++    )
