@@ -1,0 +1,342 @@
+--- a/plugin.py
++++ b/plugin.py
+@@ -417,7 +417,7 @@
+             return None
+ 
+ # Versi plugin untuk ditampilkan kecil pada header panel (informasi saja).
+-PLN_TOOLS_VERSION = "v6.17.14"
++PLN_TOOLS_VERSION = "v6.17.15"
+ DXF_LAST_EXPORT_FOLDER_KEY = "PLNTools/dxf_last_export_folder"
+ PREVIEW_LAST_EXPORT_FOLDER_KEY = "PLNTools/preview_last_export_folder"
+ 
+@@ -59900,11 +59900,10 @@
+     def _manual_existing_anchor_pull_rows(self, anchor_layer, anchor_feature):
+         """Kembalikan tarikan awal unik ``status/bagian/kode`` pada anchor.
+ 
+-        Deduplikasi dilakukan per feature/edge jaringan, bukan per Gardu atau
+-        titik tujuan. Jaringan underbuild nyata menghasilkan TM-4X utama dan
+-        TR-7 underbuild pada bentang yang sama; JTR biasa selalu menghasilkan
+-        TR-7 utama. Kode BOQ dan kode tampilan sumber Gardu selalu sama-sama
+-        TR-7; TR-3 hanya dievaluasi pada ujung lawan yang memang bukan sumber.
++        Deduplikasi dilakukan per feature/edge jaringan, bukan per Gardu atau
++        titik tujuan. Pada tiang eksisting, jaringan underbuild menghasilkan
++        TM-4X utama dan TR-3 bawah pada bentang yang sama. Gardu tetap menjadi
++        sumber TR-7, sedangkan JTR biasa dari tiang eksisting memakai TR-7.
+         """
+         if anchor_layer is None or anchor_feature is None:
+             return []
+@@ -60145,16 +60144,13 @@
+                     "FROM" if from_match else "TO",
+                 )
+ 
+-                occurrence_types = []
+-                if is_underbuild:
+-                    if has_jtm and allow_tm4x:
+-                        occurrence_types.append(("utama", "TM-4X"))
+-                    if has_jtr and allow_tr7:
+-                        occurrence_types.append(("underbuild", "TR-7"))
+-                elif has_jtm and allow_tm4x:
+-                    occurrence_types.append(("utama", "TM-4X"))
+-                elif has_jtr and allow_tr7:
+-                    occurrence_types.append(("utama", "TR-7"))
++                occurrence_types = pln_underbuild.anchor_construction_occurrences(
++                    is_underbuild=is_underbuild,
++                    has_jtm=has_jtm,
++                    has_jtr=has_jtr and allow_tr7,
++                    strict_existing=allow_tm4x,
++                    is_gardu=anchor_is_gardu,
++                )
+                 for bucket, code in occurrence_types:
+                     key = (work_status, bucket, code, branch_key)
+                     rows_by_key[key] = {
+@@ -60231,8 +60227,9 @@
+         Nama method dipertahankan untuk kompatibilitas internal, tetapi keputusan
+         sekarang mengikuti tabel final:
+           - Tiang eksisting TM  → TM-4X
+-          - Tiang eksisting TR  → TR-7; untuk underbuild yang berujung gardu,
+-            konstruksi bawah anchor ditampilkan sebagai TR-3
++          - Tiang eksisting TR  → TR-7
++          - Underbuild JTM/JTR pada tiang eksisting → TM-4X utama dan
++            TR-3 pada konstruksi bawah di tiang eksisting yang sama
+           - Gardu semua status + sesi TM → konstruksi gardu dipertahankan
+           - Gardu semua status + sesi TR → TR-7 dicatat sebagai tarikan awal
+           - Tiang Rencana/Realisasi biasa tidak pernah menjadi TM-4X
+@@ -60341,12 +60338,12 @@
+             # Tidak ada lagi jaringan Rencana/Aktual yang menempel pada anchor.
+             # Bersihkan seluruh cache tarikan awal. Konstruksi lain yang bukan
+             # TM-4X/TR-7 tetap dipertahankan.
+-            generated_lower_tr3 = (
+-                str(self.get_feature_value_safe(
+-                    feature, "sumber_konstruksi_bawah", ""
+-                ) or "").strip().upper()
+-                == "OTOMATIS_ENDPOINT_GARDU_TR3"
+-            )
++            generated_lower_tr3 = str(self.get_feature_value_safe(
++                feature, "sumber_konstruksi_bawah", ""
++            ) or "").strip().upper() in (
++                "OTOMATIS_ENDPOINT_GARDU_TR3",
++                "OTOMATIS_ENDPOINT_EKSISTING_TR3",
++            )
+             lower_non_pull = [
+                 str(value or "").strip()
+                 for value in (
+@@ -60473,10 +60470,11 @@
+             if str(value or "").strip()
+             and canonicalize_construction(value) not in ("TM-4X", "TR-7")
+             and not (
+-                generated_lower_source in (
+-                    "OTOMATIS_ENDPOINT_GARDU_TR3",
+-                    "OTOMATIS_TARIKAN_AWAL_TR7",
+-                )
++                generated_lower_source in (
++                    "OTOMATIS_ENDPOINT_GARDU_TR3",
++                    "OTOMATIS_ENDPOINT_EKSISTING_TR3",
++                    "OTOMATIS_TARIKAN_AWAL_TR7",
++                )
+                 and canonicalize_construction(value) in displayed_pull_codes
+             )
+         ]
+@@ -60522,17 +60520,37 @@
+         displayed_underbuild = list(dict.fromkeys(
+             value for value in displayed_underbuild if value
+         ))
+-        if displayed_underbuild:
++        if displayed_underbuild:
+             # Field konstruksi bawah mengikuti ringkasan label, sedangkan
+             # quantity per-edge tetap berada pada tarikan_awal_rekap.
+-            lower_first = displayed_underbuild[0]
+-            updates.update({
++            lower_first = displayed_underbuild[0]
++            lower_source = (
++                "OTOMATIS_ENDPOINT_EKSISTING_TR3"
++                if lower_first == "TR-3"
++                else "OTOMATIS_TARIKAN_AWAL_TR7"
++            )
++            updates.update({
+                 "konstruksi_bawah_otomatis": lower_first,
+                 "konstruksi_bawah_digunakan": lower_first,
+                 "konstruksi_bawah_1": lower_first,
+                 "konstruksi_bawah": " ".join(displayed_underbuild[:4]),
+-                "sumber_konstruksi_bawah": "OTOMATIS_TARIKAN_AWAL_TR7",
+-            })
++                "sumber_konstruksi_bawah": lower_source,
++            })
++        elif generated_lower_source in (
++                "OTOMATIS_ENDPOINT_GARDU_TR3",
++                "OTOMATIS_ENDPOINT_EKSISTING_TR3",
++                "OTOMATIS_TARIKAN_AWAL_TR7",
++        ):
++            # Underbuild pernah menempel pada anchor, tetapi kini sudah tidak
++            # ada. Jangan biarkan TR-3/TR-7 otomatis lama tetap tampil setelah
++            # Hitung Ulang Konstruksi berikutnya.
++            updates.update({
++                "konstruksi_bawah_otomatis": "",
++                "konstruksi_bawah_digunakan": "",
++                "konstruksi_bawah": "",
++                "konstruksi_bawah_1": "",
++                "sumber_konstruksi_bawah": "",
++            })
+         if not preserve_anchor_main:
+             updates.update({
+                 "tipe_konstruksi_otomatis": used,
+@@ -60686,13 +60704,15 @@
+                 recap = str(self.get_feature_value_safe(
+                     feature, "tarikan_awal_rekap", ""
+                 ) or "").strip()
+-                if count <= 0 and not recap and current not in ("TM-4X", "TR-7"):
++                if count <= 0 and not recap and current not in ("TM-4X", "TR-7"):
+                     # v6.6.1.466: Gardu Eksisting legacy tanpa cache TR-7 tetap
+                     # harus diperiksa terhadap topologi JTR aktif. Sebelumnya
+                     # kandidat seperti ini dilewati sebelum sempat membaca edge,
+                     # sehingga Hitung Ulang F11 tidak pernah memulihkan ledger.
+-                    if str(layer_name or "").upper() != "GARDU_EKSISTING":
+-                        continue
++                    if str(layer_name or "").upper() not in (
++                        "GARDU_EKSISTING", "TIANG_EKSISTING"
++                    ):
++                        continue
+                 key = (str(layer.id()), int(feature.id()))
+                 if key not in seen:
+                     seen.add(key)
+--- a/underbuild_termination.py
++++ b/underbuild_termination.py
+@@ -65,6 +65,33 @@
+ TRUE_TEXTS = frozenset({"ya", "yes", "1", "true", "aktif", "y"})
+ 
+ 
++def anchor_construction_occurrences(
++        is_underbuild=False, has_jtm=False, has_jtr=False,
++        strict_existing=False, is_gardu=False):
++    """Kode konstruksi pada endpoint sumber lintas layer/status.
++
++    Tiang eksisting pada JTM selalu menjadi TM-4X. Jika bentang yang sama
++    membawa JTR underbuild, ujung bawah pada tiang eksisting adalah TR-3,
++    bukan TR-7 dan bukan dipindahkan ke tiang rencana tetangganya. Gardu tetap
++    menjadi sumber tarikan TR-7 sesuai aturan existing.
++    """
++    result = []
++    if bool(is_underbuild):
++        if bool(has_jtm) and bool(strict_existing):
++            result.append(("utama", "TM-4X"))
++        if bool(has_jtr):
++            if bool(strict_existing):
++                result.append(("underbuild", TERMINATION_CODE))
++            elif bool(is_gardu):
++                result.append(("underbuild", "TR-7"))
++        return result
++    if bool(has_jtm) and bool(strict_existing):
++        result.append(("utama", "TM-4X"))
++    elif bool(has_jtr) and (bool(strict_existing) or bool(is_gardu)):
++        result.append(("utama", "TR-7"))
++    return result
++
++
+ def clean(value):
+     try:
+         text = re.sub(r"\s+", " ", str(value if value is not None else "").strip())
+--- a/tests/test_underbuild_termination.py
++++ b/tests/test_underbuild_termination.py
+@@ -334,6 +334,44 @@
+         self.assertEqual(2, rows[0]["Rencana Awal"])
+ 
+ 
++class ExistingAnchorConstructionTests(unittest.TestCase):
++    """Tiang eksisting harus ditulis, bukan hanya menjadi vertex virtual."""
++
++    def test_plain_jtm_on_existing_pole_is_tm4x(self):
++        self.assertEqual(
++            [("utama", "TM-4X")],
++            underbuild.anchor_construction_occurrences(
++                has_jtm=True, strict_existing=True,
++            ),
++        )
++
++    def test_underbuild_on_existing_pole_is_tm4x_plus_lower_tr3(self):
++        self.assertEqual(
++            [("utama", "TM-4X"), ("underbuild", "TR-3")],
++            underbuild.anchor_construction_occurrences(
++                is_underbuild=True, has_jtm=True, has_jtr=True,
++                strict_existing=True,
++            ),
++        )
++
++    def test_gardu_underbuild_remains_tr7_source(self):
++        self.assertEqual(
++            [("underbuild", "TR-7")],
++            underbuild.anchor_construction_occurrences(
++                is_underbuild=True, has_jtm=True, has_jtr=True,
++                is_gardu=True,
++            ),
++        )
++
++    def test_plain_existing_jtr_remains_tr7(self):
++        self.assertEqual(
++            [("utama", "TR-7")],
++            underbuild.anchor_construction_occurrences(
++                has_jtr=True, strict_existing=True,
++            ),
++        )
++
++
+ class PluginContractTests(unittest.TestCase):
+     """Pemakaiannya di ``plugin.py``."""
+ 
+@@ -404,6 +442,23 @@
+         self.assertIn("self.project_location_registry()", body)
+         self.assertNotIn("material_control_scope()", body)
+ 
++    def test_full_recalculation_scans_empty_existing_poles(self):
++        body = method_source(self.plugin, "_existing_anchor_pull_sync_candidates")
++        self.assertIn('"GARDU_EKSISTING", "TIANG_EKSISTING"', body)
++
++    def test_existing_anchor_codes_come_from_shared_rule(self):
++        body = method_source(self.plugin, "_manual_existing_anchor_pull_rows")
++        self.assertIn("pln_underbuild.anchor_construction_occurrences(", body)
++
++    def test_existing_anchor_tr3_has_distinct_automatic_source(self):
++        body = method_source(self.plugin, "_manual_apply_existing_anchor_tm4f")
++        self.assertIn('"OTOMATIS_ENDPOINT_EKSISTING_TR3"', body)
++
++    def test_stale_existing_anchor_tr3_is_cleared(self):
++        body = method_source(self.plugin, "_manual_apply_existing_anchor_tm4f")
++        self.assertIn('"konstruksi_bawah_digunakan": ""', body)
++        self.assertIn('"sumber_konstruksi_bawah": ""', body)
++
+ 
+ class ModulesStillParseTests(unittest.TestCase):
+     def test_the_edited_modules_compile(self):
+--- a/metadata.txt
++++ b/metadata.txt
+@@ -1,10 +1,11 @@
+ [general]
+-name=SIGAMON v6.17.14 Gambar, Analisis, dan Monitoring Jaringan
++name=SIGAMON v6.17.15 Gambar, Analisis, dan Monitoring Jaringan
+ qgisMinimumVersion=3.0
+ author=SIGAMON — UP2K Sulawesi Utara
+ email=
+-version=6.17.14
+-changelog=v6.17.14: Label jaringan kini mengutamakan manual_distance sebelum jarak_target dan langsung di-refresh setelah koreksi/reset. Pasangan jaringan utama dan underbuild dengan endpoint serta scope proyek/tahap yang sama memakai satu override jarak dan diperbarui dalam satu transaksi. Geometri tidak berubah; Detail Tarikan tetap satu kolom Jarak (m) dan read-only.
++version=6.17.15
++changelog=v6.17.15: Hitung Ulang Konstruksi kini selalu memindai TIANG_EKSISTING meski belum memiliki cache tarikan awal. JTM yang berujung pada tiang eksisting menghasilkan TM-4X; bila bentang tersebut underbuild, tiang eksisting yang sama mendapat TR-3 pada konstruksi bawah, bukan TR-3 pada tiang rencana tetangga. Gardu dan JTR biasa tetap mempertahankan aturan TR-7. Pembacaan memakai endpoint UUID/ID plus verifikasi posisi fisik.
++    v6.17.14: Label jaringan kini mengutamakan manual_distance sebelum jarak_target dan langsung di-refresh setelah koreksi/reset. Pasangan jaringan utama dan underbuild dengan endpoint serta scope proyek/tahap yang sama memakai satu override jarak dan diperbarui dalam satu transaksi. Geometri tidak berubah; Detail Tarikan tetap satu kolom Jarak (m) dan read-only.
+     v6.17.13: Koreksi jarak kecil dipindahkan khusus ke Tools - Alat Peta - Edit Jarak Gawang. Pengguna memilih segmen yang terlihat, melihat jarak geometri/perhitungan/status, lalu mengubah atau mereset override tanpa mengubah geometri. Tampilan BOQ dan Detail Tarikan kembali seperti sebelum fitur koreksi jarak; nilai koreksi tetap dipakai oleh mesin perhitungan.
+     v6.17.12: Menambahkan override Jarak Perhitungan per gawang dan per Tahap Data langsung dari Detail Tarikan. Jarak Geometri tetap terpisah dan tidak berubah; edit/reset hanya menulis field manual_distance, sedangkan KMS, kebutuhan kabel, BOQ, Spreadsheet, dashboard, dan label memakai jarak efektif dari satu helper. Validasi menolak nol, negatif, NaN, infinity, dan teks. Data lama tetap otomatis. Lihat AUDIT_v6.17.12.md.
+     v6.17.11: Sheet Tiang kini memakai konsep tabel panjang yang sama dengan Kabel: satu baris per Lokasi Proyek, klasifikasi/spesifikasi, dan Tahap Data (Rencana Awal, Rencana Akhir, Realisasi). Identitas proyek, target Rencana Akhir, alokasi, deviasi, status, filter, urutan fase, pemisahan TM/TR, dan cakupan seluruh lokasi dipertahankan secara eksplisit. Konstruksi Tiang serta seluruh logika BOQ/kabel/QGIS tidak diubah. Lihat AUDIT_v6.17.11.md.
+--- a/README.txt
++++ b/README.txt
+@@ -1,4 +1,5 @@
+-SIGAMON v6.17.14
++SIGAMON v6.17.15
++Lihat AUDIT_v6.17.15.md untuk perbaikan TM-4X/TR-3 pada tiang eksisting.
+ Lihat AUDIT_v6.17.14.md untuk sinkronisasi label dan satu jarak underbuild.
+ Lihat AUDIT_v6.17.13.md untuk Tools > Alat Peta > Edit Jarak Gawang.
+ Lihat AUDIT_v6.17.12.md untuk edit jarak perhitungan tanpa menggeser jaringan.
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -1,4 +1,4 @@
+-# SIGAMON v6.17.14
++# SIGAMON v6.17.15
+ 
+ Workspace pengembangan plugin QGIS SIGAMON. Judul Proyek adalah batas data
+ tertinggi: dua Judul Proyek tetap dua dataset walaupun desa, nama Lokasi
+--- /dev/null
++++ b/AUDIT_v6.17.15.md
+@@ -0,0 +1,22 @@
++# Audit SIGAMON v6.17.15
++
++## Akar masalah
++
++Pemindaian penuh tarikan awal hanya memeriksa tiang eksisting yang sudah mempunyai cache TM-4X/TR-7. Tiang eksisting kosong dilewati, sehingga Hitung Ulang tidak pernah dapat membuat TM-4X pertama. Selain itu endpoint bawah pada bentang JTM+JTR underbuild masih dipetakan sebagai TR-7.
++
++## Perbaikan
++
++- Semua `TIANG_EKSISTING` ikut pemindaian Hitung Ulang, termasuk yang konstruksinya masih kosong.
++- Endpoint tetap diverifikasi dengan UUID/ID dan posisi fisik maksimal 0,50 m.
++- JTM ke tiang eksisting menghasilkan konstruksi utama `TM-4X`.
++- JTM+JTR underbuild ke tiang eksisting menghasilkan `TM-4X` utama dan `TR-3` bawah pada tiang eksisting yang sama.
++- TR-3 tidak dialihkan ke tiang rencana tetangga.
++- Jika underbuild dilepas, TR-3 otomatis lama dibersihkan pada hitung ulang
++  berikutnya agar tidak menjadi data konstruksi bawah yang tertinggal.
++- Gardu underbuild dan JTR biasa tetap memakai aturan sumber `TR-7`.
++- Penulisan anchor berlangsung melalui transaksi existing dan tidak mengubah geometri.
++
++## Verifikasi
++
++- Test terarah: 47 test lulus.
++- Regression penuh: 3.428 test lulus, 6 dilewati, 0 gagal.
+--- /dev/null
++++ b/TEST_MATRIX_v6.17.15.md
+@@ -0,0 +1,13 @@
++# Test Matrix SIGAMON v6.17.15
++
++| Skenario | Expected | Hasil |
++|---|---|---|
++| JTM biasa berujung TIANG_EKSISTING kosong | TM-4X pada tiang eksisting | Lulus |
++| JTM+JTR underbuild berujung TIANG_EKSISTING | TM-4X utama + TR-3 bawah | Lulus |
++| Tiang rencana di sebelah endpoint eksisting | Tidak mengambil TR-3 milik endpoint | Lulus |
++| Underbuild dari Gardu | TR-7 tetap pada sumber Gardu | Lulus |
++| JTR biasa dari TIANG_EKSISTING | TR-7 tetap berlaku | Lulus |
++| Pemindaian cache kosong | TIANG_EKSISTING tetap diperiksa | Lulus |
++| Underbuild dilepas lalu hitung ulang | TR-3 otomatis lama dibersihkan | Lulus |
++| Geometri | Tidak berubah | Lulus |
++| Regression penuh | 3.428 lulus, 6 dilewati, 0 gagal | Lulus |
