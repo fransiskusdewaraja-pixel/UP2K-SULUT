@@ -1,0 +1,814 @@
+diff --git a/AUDIT_v6.17.20.md b/AUDIT_v6.17.20.md
+new file mode 100644
+index 0000000..8035012
+--- /dev/null
++++ b/AUDIT_v6.17.20.md
+@@ -0,0 +1,36 @@
++# Audit SIGAMON v6.17.20
++
++## Masalah
++
++Dialog Tambah Underbuild hanya membangun graph dari `JARINGAN_RENCANA` atau
++`JARINGAN_AKTUAL`. Ketika lokasi hanya mempunyai JTM Eksisting, dialog berhenti
++dengan pesan bahwa layer Rencana belum mempunyai segmen. Selain itu, bila
++geometri existing disalin tanpa klasifikasi khusus, overlay dapat dianggap JTM
++baru dan menyebabkan TM-4X/BOQ terhitung dua kali.
++
++## Perbaikan
++
++- Graph pemilihan menggabungkan JTM tahap terpilih dengan
++  `JARINGAN_EKSISTING` pada Judul Proyek dan Lokasi Proyek yang sama.
++- Node berhimpit digabung secara topologis sehingga rute dapat melewati anchor
++  bersama tanpa memakai jaringan dari lokasi berdekatan.
++- Segmen Existing tidak pernah dimutasi. Satu overlay JTR bertahap dibuat pada
++  `JARINGAN_RENCANA` atau `JARINGAN_AKTUAL` dengan `parent_uid` segmen sumber.
++- Penerapan ulang pada sumber dan tahap yang sama bersifat idempotent.
++- Seluruh atribut jarak diwariskan; `manual_distance`/Jarak (m) input tetap
++  menjadi sumber utama dan geometri tidak diubah.
++- Overlay existing diklasifikasikan sebagai JTR-underbuild saja. JTM carrier
++  tetap dibaca dari layer Existing, sehingga BOQ memperoleh tepat satu TM-4X
++  dan terminasi bawah memperoleh TR-3 tanpa menggandakan kebutuhan JTM.
++- Rencana Awal, Rencana Akhir, dan Realisasi tetap terpisah oleh `tahap_data`.
++
++## Batas Perubahan
++
++Tidak ada perubahan pada rumus kabel, sagging, tambahan konstruksi, CEIL,
++jumlah tiang fisik, koordinat, Google Spreadsheet, DXF, Preview Maps, atau
++filter operasional F11.
++
++## Verifikasi
++
++- Test fokus BOQ/TM-4X/underbuild/tahap: 235 lulus, 0 gagal.
++- Regression penuh: 3.471 lulus, 6 dilewati, 0 gagal.
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 925555a..e6427ed 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -1,4 +1,4 @@
+-# SIGAMON v6.17.19
++# SIGAMON v6.17.20
+ 
+ Workspace pengembangan plugin QGIS SIGAMON. Judul Proyek adalah batas data
+ tertinggi: dua Judul Proyek tetap dua dataset walaupun desa, nama Lokasi
+diff --git a/README.txt b/README.txt
+index c2ae21f..d4ace58 100644
+--- a/README.txt
++++ b/README.txt
+@@ -1,4 +1,6 @@
+-SIGAMON v6.17.19
++SIGAMON v6.17.20
++Lihat AUDIT_v6.17.20.md untuk penambahan underbuild langsung pada JTM
++Eksisting tanpa menggandakan JTM/TM-4X dan dengan Jarak (m) input yang sama.
+ Lihat AUDIT_v6.17.19.md untuk deduplikasi TM-4X per tiang fisik dan
+ pembacaan TR-3 terminasi underbuild pada tiang eksisting.
+ Lihat AUDIT_v6.17.17.md untuk dukungan underbuild pada TIANG_EKSISTING di
+diff --git a/TEST_MATRIX_v6.17.20.md b/TEST_MATRIX_v6.17.20.md
+new file mode 100644
+index 0000000..8696abb
+--- /dev/null
++++ b/TEST_MATRIX_v6.17.20.md
+@@ -0,0 +1,16 @@
++# Test Matrix SIGAMON v6.17.20
++
++| Skenario | Expected | Hasil |
++|---|---|---|
++| Lokasi tanpa JARINGAN_RENCANA tetapi memiliki JTM Eksisting | Jalur dapat dipilih | Lulus |
++| Graph tahap dan Existing bertemu pada anchor | Node tersambung tanpa lintas lokasi | Lulus |
++| Tambah underbuild pada JTM Eksisting | Membuat overlay JTR di layer tahap | Lulus |
++| Feature JTM Eksisting sumber | Tetap read-only | Lulus |
++| Penerapan ulang sumber+tahap yang sama | Tidak membuat overlay duplikat | Lulus |
++| Jarak (m) manual pada carrier | Diwariskan tanpa diganti jarak geometri | Lulus |
++| BOQ carrier Existing + overlay JTR | TM-4X = 1, bukan 2 | Lulus |
++| Terminasi overlay pada tiang Existing | TR-3 terbaca | Lulus |
++| Overlay melintas tiang Existing | Tidak membuat TR-3 palsu | Lulus |
++| Lokasi Proyek berdekatan dalam desa sama | Scope tetap terpisah | Lulus |
++| Rencana Awal/Akhir/Realisasi | Overlay tersimpan pada tahap pilihan | Lulus |
++| Regression penuh | 3.471 lulus, 6 dilewati, 0 gagal | Lulus |
+diff --git a/metadata.txt b/metadata.txt
+index 6f21956..3590b94 100644
+--- a/metadata.txt
++++ b/metadata.txt
+@@ -1,10 +1,11 @@
+ [general]
+-name=SIGAMON v6.17.19 Gambar, Analisis, dan Monitoring Jaringan
++name=SIGAMON v6.17.20 Gambar, Analisis, dan Monitoring Jaringan
+ qgisMinimumVersion=3.0
+ author=SIGAMON — UP2K Sulawesi Utara
+ email=
+-version=6.17.19
+-changelog=v6.17.19: Memperbaiki BOQ tiang eksisting secara topologis. TM-4X kini dideduplikasi satu kali per tiang fisik, tahap, dan Lokasi Proyek walaupun beberapa edge menempel. TR-3 underbuild pada tiang eksisting dihitung dari terminasi route aktif: satu route berakhir = satu TR-3, route tembus = nol, dan dua route berakhir = dua. UUID endpoint tetap utama dan ID legacy tidak boleh menyeberang lokasi. Lihat AUDIT_v6.17.19.md.
++version=6.17.20
++changelog=v6.17.20: Tambah Underbuild kini membaca graph gabungan JTM tahap terpilih dan JARINGAN_EKSISTING dalam Lokasi Proyek yang sama. JTM Eksisting tetap read-only; SIGAMON membuat satu overlay JTR pada layer Rencana/Aktual, mempertahankan Jarak (m) input, dan memberi parent_uid sumber agar idempotent. Overlay dihitung sebagai JTR saja sehingga BOQ menghasilkan satu TM-4X dari carrier eksisting dan TR-3 pada terminasi tanpa menggandakan JTM/TM-4X. Lihat AUDIT_v6.17.20.md.
++    v6.17.19: Memperbaiki BOQ tiang eksisting secara topologis. TM-4X kini dideduplikasi satu kali per tiang fisik, tahap, dan Lokasi Proyek walaupun beberapa edge menempel. TR-3 underbuild pada tiang eksisting dihitung dari terminasi route aktif: satu route berakhir = satu TR-3, route tembus = nol, dan dua route berakhir = dua. UUID endpoint tetap utama dan ID legacy tidak boleh menyeberang lokasi. Lihat AUDIT_v6.17.19.md.
+     v6.17.17: Tambah/Hapus Underbuild kini memperlakukan TIANG_EKSISTING sebagai node topologi bersama pada Rencana Awal, Rencana Akhir, dan Realisasi. Pemilihan serta penulisan konstruksi memakai scope Judul Proyek/Lokasi Proyek dan endpoint UUID-first; ID hanya fallback data lama. TM-4X utama dan TR-3 bawah dapat tersimpan bersama pada satu tiang eksisting dalam transaksi yang sama, termasuk terminasi ganda. Tiang eksisting tidak disalin ke layer tahap. Jarak (m) manual tetap satu sumber untuk gawang utama/underbuild. Lihat AUDIT_v6.17.17.md.
+     v6.17.16: Renderer JARINGAN_EKSISTING kini mengikuti warna tipe yang sama dengan Realisasi: JTM/SUTM merah solid, JTR/SUTR biru solid, dan underbuild merah-biru solid sejajar. Renderer tunggal ungu dihapus. Perubahan hanya pada penyajian; geometri, panjang, konstruksi, label, BOQ, dan data jaringan tidak berubah.
+     v6.17.15: Hitung Ulang Konstruksi kini selalu memindai TIANG_EKSISTING meski belum memiliki cache tarikan awal. JTM yang berujung pada tiang eksisting menghasilkan TM-4X; bila bentang tersebut underbuild, tiang eksisting yang sama mendapat TR-3 pada konstruksi bawah, bukan TR-3 pada tiang rencana tetangga. Gardu dan JTR biasa tetap mempertahankan aturan TR-7. Pembacaan memakai endpoint UUID/ID plus verifikasi posisi fisik.
+diff --git a/plugin.py b/plugin.py
+index 4372ddd..4940963 100644
+--- a/plugin.py
++++ b/plugin.py
+@@ -417,7 +417,7 @@ except Exception:
+             return None
+ 
+ # Versi plugin untuk ditampilkan kecil pada header panel (informasi saja).
+-PLN_TOOLS_VERSION = "v6.17.19"
++PLN_TOOLS_VERSION = "v6.17.20"
+ DXF_LAST_EXPORT_FOLDER_KEY = "PLNTools/dxf_last_export_folder"
+ PREVIEW_LAST_EXPORT_FOLDER_KEY = "PLNTools/preview_last_export_folder"
+ 
+@@ -948,9 +948,9 @@ BOQ_INPUT_LENGTH_FIELD_PRIORITY = [
+ ]
+ 
+ 
+-def _pln_network_length_segment_flags(
+-        jenis="", utama="", bawah="", under_value="",
+-        lower_construction=""):
++def _pln_network_length_segment_flags(
++        jenis="", utama="", bawah="", under_value="",
++        lower_construction=""):
+     """Klasifikasi JTM/JTR/underbuild bersama untuk seluruh tampilan.
+ 
+     Helper ini sengaja menjadi satu-satunya rumus klasifikasi panjang agar
+@@ -969,11 +969,18 @@ def _pln_network_length_segment_flags(
+         or "UNDER" in combined
+         or bool(lower_text and ("JTM" in combined or "JTR" in combined))
+     )
+-    has_jtm = any(token in combined for token in ("JTM", "SUTM", "TM"))
+-    has_jtr = any(token in combined for token in ("JTR", "SUTR", "TR"))
+-    if is_under:
+-        has_jtm = True
+-        has_jtr = True
++    has_jtm = any(token in combined for token in ("JTM", "SUTM", "TM"))
++    has_jtr = any(token in combined for token in ("JTR", "SUTR", "TR"))
++    # Overlay JTR yang ditarik pada aset JTM Eksisting adalah SATU sirkuit
++    # baru (JTR), bukan JTM baru + JTR baru. JTM penyangganya tetap berada di
++    # JARINGAN_EKSISTING dan hanya menjadi referensi geometri/topologi.
++    existing_carrier_overlay = bool(
++        is_under and has_jtr and not has_jtm
++        and "EKSISTING" in combined
++    )
++    if is_under:
++        has_jtm = not existing_carrier_overlay
++        has_jtr = True
+     if not has_jtm and not has_jtr:
+         has_jtm = "JTM" in jenis_text or "SUTM" in jenis_text
+         has_jtr = "JTR" in jenis_text or "SUTR" in jenis_text
+@@ -14588,20 +14595,16 @@ class DashboardNetworkRangeDialog(QDialog):
+         except Exception:
+             return default
+ 
+-    def _segment_flags(self, layer, feat):
++    def _segment_flags(self, layer, feat):
+         jenis = str(self._read_attr(layer, feat, ["jenis_jaringan", "jenis", "tipe_jaringan"], "") or "").upper()
+         utama = str(self._read_attr(layer, feat, ["jaringan_utama", "ada_jtm"], "") or "").upper()
+         bawah = str(self._read_attr(layer, feat, ["jaringan_bawah", "ada_jtr"], "") or "").upper()
+         under_value = str(self._read_attr(layer, feat, ["status_underbuild"], "") or "").strip().lower()
+         lower_construction = " ".join(str(self._read_attr(layer, feat, ["konstruksi_bawah_{}".format(i)], "") or "") for i in range(1, 5)).strip()
+-        combined = " {} {} {} ".format(jenis, utama, bawah)
+-        is_under = under_value in ("ya", "yes", "1", "true") or "UNDER" in combined or bool(lower_construction and ("JTM" in combined or "JTR" in combined))
+-        has_jtm = any(token in combined for token in ("JTM", "SUTM", "TM"))
+-        has_jtr = any(token in combined for token in ("JTR", "SUTR", "TR"))
+-        if is_under:
+-            has_jtm = True
+-            has_jtr = True
+-        if not has_jtm and not has_jtr:
++        has_jtm, has_jtr, is_under = _pln_network_length_segment_flags(
++            jenis, utama, bawah, under_value, lower_construction
++        )
++        if not has_jtm and not has_jtr:
+             # Fallback untuk data lama: inferensi yang sama dengan Dashboard.
+             inferred = str(self.dashboard._infer_jenis_jaringan(layer, feat) or "").upper()
+             has_jtm = "JTM" in inferred or "SUTM" in inferred
+@@ -15459,12 +15462,13 @@ class UnderbuildRangeContext(QWidget):
+         self.lbl_status.clear()
+ 
+ 
+-class UnderbuildRangeDialog(DashboardNetworkRangeDialog):
++class UnderbuildRangeDialog(DashboardNetworkRangeDialog):
+     """Tambahkan underbuild pada rentang JTM yang sudah ada.
+ 
+-    Geometri utama tidak diduplikasi dan tidak dipindah. Segmen JTM pada jalur
+-    terpilih diberi atribut JTR-underbuild. Konstruksi bawah dan perangkat
+-    turunannya baru dihitung ketika tombol Hitung Ulang di F11 ditekan.
++    JTM Rencana/Aktual yang dipilih diperbarui pada feature yang sama. Bila
++    penyangganya JTM Eksisting, sumber tetap read-only dan hanya satu overlay
++    JTR khusus tahap dibuat pada layer tujuan. Dengan demikian JTM Eksisting
++    tidak berubah dan tidak ikut dihitung sebagai kebutuhan JTM baru.
+     """
+ 
+     def __init__(self, plugin, dashboard=None):
+@@ -15505,6 +15509,7 @@ class UnderbuildRangeDialog(DashboardNetworkRangeDialog):
+ 
+     def _allowed_network_fids(self, layer):
+         stage = pln_stage.normalize_stage(self.cbo_data.currentText())
++        layer_is_existing = "EKSISTING" in str(layer.name() or "").upper()
+         scope = self.plugin.active_project_scope()
+         location = self._underbuild_context._combo_text(self._underbuild_context.cbo_desa)
+         all_locations = location.casefold() in ("", "semua lokasi proyek", "semua desa")
+@@ -15521,10 +15526,10 @@ class UnderbuildRangeDialog(DashboardNetworkRangeDialog):
+             except Exception:
+                 location_ids = set()
+         allowed = set()
+-        for feature in layer.getFeatures():
+-            values = self.plugin._engineering_feature_values(feature)
+-            if values["tahap_data"] != stage:
+-                continue
++        for feature in layer.getFeatures():
++            values = self.plugin._engineering_feature_values(feature)
++            if (not layer_is_existing and values["tahap_data"] != stage):
++                continue
+             if not pln_project_scope.row_in_scope(scope, values):
+                 continue
+             if not all_locations:
+@@ -15537,20 +15542,123 @@ class UnderbuildRangeDialog(DashboardNetworkRangeDialog):
+                 elif values["lokasi_proyek"].casefold() != location.casefold():
+                     continue
+             allowed.add(int(feature.id()))
+-        return allowed, location + " | " + stage
+-
+-    def _build_graph(self, force=False):
+-        graph = super()._build_graph(force=force)
+-        # Pemilihan rute underbuild hanya boleh berjalan melalui JTM. JTR biasa
+-        # tidak boleh menjadi jalan pintas pada percabangan topologi.
+-        adjacency = {node_id: [] for node_id in graph.get("nodes", {})}
++        return allowed, location + " | " + stage + (
++            " | Eksisting" if layer_is_existing else ""
++        )
++
++    def _build_graph(self, force=False):
++        status = _pln_internal_status(self.cbo_data)
++        if (not force and not self._graph_dirty and self._graph is not None
++                and self._graph_status == status
++                and self._graph.get("underbuild_combined")):
++            return self._graph
++
++        graphs = []
++        errors = []
++        original_map = self.DATA_LAYER_MAP
++        layer_names = []
++        primary = original_map.get(status)
++        if primary:
++            layer_names.append(primary)
++        if "JARINGAN_EKSISTING" not in layer_names:
++            layer_names.append("JARINGAN_EKSISTING")
++        try:
++            for layer_name in layer_names:
++                self.DATA_LAYER_MAP = dict(original_map)
++                self.DATA_LAYER_MAP[status] = layer_name
++                self._graph = None
++                self._graph_dirty = True
++                try:
++                    graphs.append(super()._build_graph(force=True))
++                except ValueError as exc:
++                    errors.append(str(exc))
++        finally:
++            self.DATA_LAYER_MAP = original_map
++        if not graphs:
++            raise ValueError(errors[0] if errors else (
++                "Belum ada segmen JTM tahap terpilih maupun JTM Eksisting."
++            ))
++
++        # Gabungkan node kedua layer pada koordinat yang sama. Graph gabungan
++        # membuat rute dapat dimulai di JTM tahap, melintas anchor bersama,
++        # lalu diteruskan pada JTM Eksisting tanpa mencampur lokasi proyek.
++        graph = graphs[0]
++        graph["layers"] = [graph.get("layer")]
++        tolerance = float(graph.get("tolerance") or 0.75)
++        for extra in graphs[1:]:
++            graph["layers"].append(extra.get("layer"))
++            node_map = {}
++            for old_id, old_node in extra.get("nodes", {}).items():
++                point = old_node.get("point")
++                nearest = None
++                for node_id, node in graph.get("nodes", {}).items():
++                    other = node.get("point")
++                    distance = math.hypot(
++                        float(point.x()) - float(other.x()),
++                        float(point.y()) - float(other.y()),
++                    )
++                    if distance <= tolerance and (
++                            nearest is None or distance < nearest[0]):
++                        nearest = (distance, node_id)
++                if nearest is None:
++                    new_id = max(graph.get("nodes", {}).keys(), default=-1) + 1
++                    graph["nodes"][new_id] = old_node
++                    node_map[old_id] = new_id
++                else:
++                    node_map[old_id] = nearest[1]
++                    target_node = graph["nodes"][nearest[1]]
++                    for label in old_node.get("labels", []):
++                        if label not in target_node.get("labels", []):
++                            target_node.setdefault("labels", []).append(label)
++                    target_node.setdefault("endpoint_pairs", set()).update(
++                        old_node.get("endpoint_pairs", set())
++                    )
++                    target_node.setdefault("scopes", []).extend(
++                        old_node.get("scopes", [])
++                    )
++            for old_key, old_edge in extra.get("edges", {}).items():
++                edge = dict(old_edge)
++                edge["a"] = node_map[old_edge["a"]]
++                edge["b"] = node_map[old_edge["b"]]
++                geom_signature = old_key[2] if len(old_key) > 2 else old_key
++                key = (min(edge["a"], edge["b"]),
++                       max(edge["a"], edge["b"]), geom_signature)
++                current = graph["edges"].get(key)
++                if current is None:
++                    graph["edges"][key] = edge
++                else:
++                    current["length"] = max(
++                        float(current.get("length") or 0.0),
++                        float(edge.get("length") or 0.0),
++                    )
++                    current["jtm"] = bool(current.get("jtm") or edge.get("jtm"))
++                    current["jtr"] = bool(current.get("jtr") or edge.get("jtr"))
++                    current["underbuild"] = bool(
++                        current.get("underbuild") or edge.get("underbuild")
++                    )
++                    current.setdefault("features", []).extend(
++                        edge.get("features", [])
++                    )
++
++        # Pemilihan rute underbuild hanya boleh berjalan melalui JTM. JTR biasa
++        # tidak boleh menjadi jalan pintas pada percabangan topologi.
++        adjacency = {node_id: [] for node_id in graph.get("nodes", {})}
+         for edge_key, edge in graph.get("edges", {}).items():
+             if not bool(edge.get("jtm")):
+                 continue
+             adjacency[edge["a"]].append((edge["b"], edge_key))
+             adjacency[edge["b"]].append((edge["a"], edge_key))
+-        graph["adjacency"] = adjacency
+-        return graph
++        graph["adjacency"] = adjacency
++        if not any(adjacency.values()):
++            raise ValueError(
++                "Tahap terpilih dan JARINGAN_EKSISTING belum memiliki segmen JTM."
++            )
++        graph["underbuild_combined"] = True
++        graph["status"] = status
++        self._graph = graph
++        self._graph_status = status
++        self._graph_dirty = False
++        return graph
+ 
+     def calculate_path(self):
+         super().calculate_path()
+@@ -15568,23 +15676,63 @@ class UnderbuildRangeDialog(DashboardNetworkRangeDialog):
+         except Exception:
+             pass
+ 
+-    def _network_feature_for_edge(self, graph, edge):
+-        layer = graph.get("layer")
+-        if layer is None:
+-            return None
+-        fallback = None
+-        for feature_layer, fid in edge.get("features", []):
+-            if feature_layer is None or feature_layer.id() != layer.id():
+-                continue
+-            feature = self.plugin._feature_by_id(layer, fid)
+-            if feature is None:
+-                continue
+-            has_jtm, has_jtr, is_under = self._segment_flags(layer, feature)
+-            if has_jtm and not is_under and not has_jtr:
+-                return feature
+-            if has_jtm and fallback is None:
+-                fallback = feature
+-        return fallback
++    def _network_feature_for_edge(self, graph, edge):
++        preferred_layer = graph.get("layer")
++        fallback = None
++        for feature_layer, fid in edge.get("features", []):
++            if feature_layer is None:
++                continue
++            feature = self.plugin._feature_by_id(feature_layer, fid)
++            if feature is None:
++                continue
++            has_jtm, has_jtr, is_under = self._segment_flags(
++                feature_layer, feature
++            )
++            if has_jtm and not is_under and not has_jtr:
++                if (preferred_layer is not None
++                        and feature_layer.id() == preferred_layer.id()):
++                    return feature_layer, feature
++                if fallback is None:
++                    fallback = (feature_layer, feature)
++            if has_jtm and fallback is None:
++                fallback = (feature_layer, feature)
++        return fallback
++
++    def _underbuild_overlay_for_existing(self, target_layer, source_feature,
++                                         selected_stage):
++        """Temukan overlay tahap yang sudah berasal dari segmen Existing."""
++        source_uuid = pln_stage.clean(self.plugin.get_feature_value_safe(
++            source_feature, UUID_FIELD, ""
++        ))
++        if not source_uuid or target_layer is None:
++            return None
++        source_scope = self.plugin._engineering_feature_values(source_feature)
++        for candidate in target_layer.getFeatures():
++            if pln_stage.clean(self.plugin.get_feature_value_safe(
++                    candidate, pln_stage.FIELD_PARENT_UID, "")) != source_uuid:
++                continue
++            values = self.plugin._engineering_feature_values(candidate)
++            if values.get("tahap_data") != selected_stage:
++                continue
++            if not pln_underbuild.same_location_scope(source_scope, values):
++                continue
++            if pln_underbuild.is_underbuild(values):
++                return candidate
++        return None
++
++    def _underbuild_overlay_geometry(self, source_layer, target_layer,
++                                     source_feature):
++        geometry = QgsGeometry(source_feature.geometry())
++        try:
++            src = source_layer.crs()
++            dst = target_layer.crs()
++            if (src.isValid() and dst.isValid() and src != dst):
++                geometry.transform(QgsCoordinateTransform(
++                    src, dst, QgsProject.instance()
++                ))
++        except Exception:
++            pass
++        return geometry
+ 
+     def apply_underbuild(self):
+         if not self._path_edges:
+@@ -15607,13 +15755,14 @@ class UnderbuildRangeDialog(DashboardNetworkRangeDialog):
+         if answer != QMessageBox.Yes:
+             return
+ 
+-        network_layer = graph.get("layer")
++        graph_layer = graph.get("layer")
+         status = str(graph.get("status") or _pln_internal_status(self.cbo_data))
+         selected_stage = pln_stage.normalize_stage(self.cbo_data.currentText())
++        network_layer = self.plugin.stage_layer("JARINGAN", selected_stage)
+         point_layers = self.plugin.topology_point_layers_for_stage(
+             selected_stage, include_gardu=False
+         )
+-        if network_layer is None or not point_layers:
++        if graph_layer is None or network_layer is None or not point_layers:
+             QMessageBox.warning(
+                 self, "Tambah Underbuild",
+                 "Layer jaringan atau node tiang {} tidak ditemukan.".format(status)
+@@ -15638,27 +15787,42 @@ class UnderbuildRangeDialog(DashboardNetworkRangeDialog):
+             QMessageBox.warning(self, "Tambah Underbuild", str(exc))
+             return
+ 
+-        target_features = []
++        target_features = []
+         component_ids = set()
+         endpoint_ids = set()
+         endpoint_pairs = set()
+         already_underbuild = 0
+-        seen_fids = set()
+-        for edge_key in self._path_edges:
+-            edge = graph.get("edges", {}).get(edge_key) or {}
+-            feature = self._network_feature_for_edge(graph, edge)
+-            if feature is None or int(feature.id()) in seen_fids:
+-                continue
+-            if bool(edge.get("underbuild")):
+-                existing_path = pln_stage.clean(self.plugin.get_feature_value_safe(
+-                    feature, "underbuild_path_id", ""))
++        seen_fids = set()
++        for edge_key in self._path_edges:
++            edge = graph.get("edges", {}).get(edge_key) or {}
++            resolved = self._network_feature_for_edge(graph, edge)
++            if resolved is None:
++                continue
++            source_layer, feature = resolved
++            source_key = (str(source_layer.id()), int(feature.id()))
++            if source_key in seen_fids:
++                continue
++            source_is_existing = (
++                "EKSISTING" in str(source_layer.name() or "").upper()
++                and source_layer.id() != network_layer.id()
++            )
++            if source_is_existing:
++                existing_overlay = self._underbuild_overlay_for_existing(
++                    network_layer, feature, selected_stage
++                )
++                if existing_overlay is not None:
++                    already_underbuild += 1
++                    continue
++            if bool(edge.get("underbuild")):
++                existing_path = pln_stage.clean(self.plugin.get_feature_value_safe(
++                    feature, "underbuild_path_id", ""))
+                 if existing_path:
+                     already_underbuild += 1
+                     continue
+                 # Legacy route: the two endpoints selected by the user recover
+                 # its missing logical identity without guessing branch history.
+-            seen_fids.add(int(feature.id()))
+-            target_features.append(feature)
++            seen_fids.add(source_key)
++            target_features.append((source_layer, feature, source_is_existing))
+             component_id = str(
+                 self.plugin.get_feature_value_safe(feature, "id_jalur", "") or ""
+             ).strip()
+@@ -15689,11 +15853,20 @@ class UnderbuildRangeDialog(DashboardNetworkRangeDialog):
+             )
+             return
+ 
+-        engineering_scope = self.plugin._engineering_feature_values(target_features[0])
+-        if any(not pln_underbuild.same_scope(engineering_scope,
+-                self.plugin._engineering_feature_values(f)) for f in target_features):
+-            QMessageBox.warning(self, "Tambah Underbuild", "Pilih jalur dalam satu lokasi dan tahap data.")
+-            return
++        source_scope = self.plugin._engineering_feature_values(
++            target_features[0][1]
++        )
++        if any(not pln_underbuild.same_location_scope(
++                source_scope, self.plugin._engineering_feature_values(f))
++                for _layer, f, _existing in target_features):
++            QMessageBox.warning(
++                self, "Tambah Underbuild",
++                "Pilih jalur dalam satu Lokasi Proyek."
++            )
++            return
++        engineering_scope = dict(source_scope)
++        engineering_scope["tahap_data"] = selected_stage
++        engineering_scope["status_data"] = status
+         path_id = new_feature_uuid()
+         transaction = ClickTransaction(
+             list(point_layers) + [network_layer],
+@@ -15702,23 +15875,65 @@ class UnderbuildRangeDialog(DashboardNetworkRangeDialog):
+         changed = 0
+         try:
+             transaction.begin()
+-            for feature in target_features:
+-                updates = {
+-                    "status_underbuild": "Ya",
+-                    "underbuild_path_id": path_id,
++            for source_layer, feature, source_is_existing in target_features:
++                updates = {
++                    "status_underbuild": "Ya",
++                    "underbuild_path_id": path_id,
+                     "jenis_jaringan": "JTM + JTR UNDERBUILD",
+                     "jaringan_utama": "JTM",
+                     "jaringan_bawah": "JTR",
+-                    "status_data": status,
+-                }
+-                available = {
+-                    name: value for name, value in updates.items()
+-                    if network_layer.fields().indexFromName(name) >= 0
+-                }
+-                transaction.snapshot_and_change(
+-                    network_layer, feature.id(), available
+-                )
+-                changed += 1
++                    "status_data": status,
++                }
++                if source_is_existing:
++                    new_uuid = new_feature_uuid()
++                    overlay = QgsFeature(network_layer.fields())
++                    copy_feature_attributes(overlay, feature, network_layer)
++                    overlay.setGeometry(self._underbuild_overlay_geometry(
++                        source_layer, network_layer, feature
++                    ))
++                    overlay_updates = dict(updates)
++                    overlay_updates.update({
++                        UUID_FIELD: new_uuid,
++                        pln_stage.FIELD_OBJECT_UID: new_uuid,
++                        pln_stage.FIELD_PARENT_UID: pln_stage.clean(
++                            self.plugin.get_feature_value_safe(
++                                feature, UUID_FIELD, ""
++                            )
++                        ),
++                        pln_stage.FIELD_VERSION_SOURCE: pln_stage.STAGE_EKSISTING,
++                        pln_stage.FIELD_STAGE: selected_stage,
++                        "id_jalur": path_id,
++                        "id_segmen": "UBX-{}".format(new_uuid[:12]),
++                        "jenis_jaringan": (
++                            "JTR UNDERBUILD PADA JARINGAN EKSISTING"
++                        ),
++                        "jaringan_utama": "REFERENSI EKSISTING",
++                        "jaringan_bawah": "JTR",
++                        "catatan_jaringan": (
++                            "Overlay JTR; JTM penyangga tetap di "
++                            "JARINGAN_EKSISTING"
++                        ),
++                    })
++                    for name, value in overlay_updates.items():
++                        self.plugin._set_ft_value(overlay, name, value)
++                    transaction.add_feature(
++                        network_layer, overlay, new_uuid,
++                        QgsWkbTypes.LineGeometry,
++                        required_values={
++                            "status_underbuild": "Ya",
++                            "tahap_data": selected_stage,
++                        },
++                    )
++                    component_ids.add(path_id)
++                else:
++                    available = {
++                        name: value for name, value in updates.items()
++                        if network_layer.fields().indexFromName(name) >= 0
++                    }
++                    transaction.snapshot_and_change(
++                        network_layer, feature.id(), available
++                    )
++                changed += 1
+ 
+             if endpoint_pairs:
+                 for point_layer in point_layers:
+@@ -60192,31 +60407,27 @@ class PLNGambarJaringanSederhanaQGIS4:
+                 if not pln_underbuild.same_topology_scope(
+                         segment_scope, anchor_scope):
+                     continue
+-                network_text = " ".join(
+-                    str(self.get_feature_value_safe(segment, name, "") or "")
+-                    for name in (
+-                        "jenis_jaringan", "tipe_jaringan", "jaringan_utama",
+-                        "jaringan_bawah", "status_underbuild", "klasifikasi",
+-                    )
+-                ).upper()
+-                is_underbuild = (
+-                    "UNDER" in network_text
+-                    or str(self.get_feature_value_safe(segment, "status_underbuild", "") or "").strip().upper()
+-                    in ("YA", "YES", "1", "TRUE", "AKTIF")
+-                )
+-                has_jtm = bool(
+-                    re.search(r"(^|[^A-Z])JTM([^A-Z]|$)", network_text)
+-                    or re.search(r"(^|[^A-Z])SUTM([^A-Z]|$)", network_text)
+-                    or "TIANG TM" in network_text
+-                )
+-                has_jtr = bool(
+-                    re.search(r"(^|[^A-Z])JTR([^A-Z]|$)", network_text)
+-                    or re.search(r"(^|[^A-Z])SUTR([^A-Z]|$)", network_text)
+-                    or "TIANG TR" in network_text
+-                )
+-                if is_underbuild:
+-                    has_jtm = True
+-                    has_jtr = True
++                has_jtm, has_jtr, is_underbuild = (
++                    _pln_network_length_segment_flags(
++                        " ".join(str(self.get_feature_value_safe(
++                            segment, name, ""
++                        ) or "") for name in (
++                            "jenis_jaringan", "tipe_jaringan", "klasifikasi",
++                        )),
++                        self.get_feature_value_safe(
++                            segment, "jaringan_utama", ""
++                        ),
++                        self.get_feature_value_safe(
++                            segment, "jaringan_bawah", ""
++                        ),
++                        self.get_feature_value_safe(
++                            segment, "status_underbuild", ""
++                        ),
++                        " ".join(str(self.get_feature_value_safe(
++                            segment, "konstruksi_bawah_{}".format(i), ""
++                        ) or "") for i in range(1, 5)),
++                    )
++                )
+                 if not has_jtm and not has_jtr:
+                     continue
+ 
+@@ -65387,22 +65598,22 @@ class PLNGambarJaringanSederhanaQGIS4:
+             if not a or not b or a == b or a not in points or b not in points:
+                 continue
+             adjacency.setdefault(a,set()).add(b); adjacency.setdefault(b,set()).add(a)
+-            under_text = " ".join(str(self.get_feature_value_safe(lf,n,"") or "") for n in
+-                                  ("status_underbuild","underbuild","jaringan_bawah","jenis_bawah","posisi_jaringan")).upper()
+-            network_text = " ".join(str(self.get_feature_value_safe(lf,n,"") or "") for n in
+-                                    ("jenis_jaringan","tipe_jaringan","jaringan_utama","jaringan_bawah",
+-                                     "status_underbuild","underbuild","jenis_bawah","posisi_jaringan",
+-                                     "klasifikasi")).upper()
+-            is_under = ("UNDER" in under_text or "JTR" in under_text or "SUTR" in under_text or
+-                        under_text.strip() in ("YA","YES","1","TRUE","AKTIF"))
+-            is_tr_edge = bool(
+-                has_network_token(network_text, ("JTR", "SUTR", "TR"))
+-                or is_under
+-            )
+-            is_tm_edge = bool(
+-                has_network_token(network_text, ("JTM", "SUTM", "TM"))
+-                or is_under
+-            )
++            network_text = " ".join(str(self.get_feature_value_safe(lf,n,"") or "") for n in
++                                    ("jenis_jaringan","tipe_jaringan","jaringan_utama","jaringan_bawah",
++                                     "status_underbuild","underbuild","jenis_bawah","posisi_jaringan",
++                                     "klasifikasi")).upper()
++            is_tm_edge, is_tr_edge, is_under = _pln_network_length_segment_flags(
++                " ".join(str(self.get_feature_value_safe(lf, n, "") or "")
++                         for n in ("jenis_jaringan", "tipe_jaringan", "klasifikasi")),
++                self.get_feature_value_safe(lf, "jaringan_utama", ""),
++                " ".join(str(self.get_feature_value_safe(lf, n, "") or "")
++                         for n in ("jaringan_bawah", "jenis_bawah", "posisi_jaringan")),
++                " ".join(str(self.get_feature_value_safe(lf, n, "") or "")
++                         for n in ("status_underbuild", "underbuild")),
++                " ".join(str(self.get_feature_value_safe(
++                    lf, "konstruksi_bawah_{}".format(i), ""
++                ) or "") for i in range(1, 5)),
++            )
+             # Data lama hasil timpa/edit kadang hanya menyimpan endpoint dan
+             # kehilangan nilai jenis_jaringan/jaringan_utama. Versi sebelumnya
+             # membuat edge seperti ini tidak masuk graf TM, sehingga degree
+diff --git a/tests/test_existing_underbuild_nodes.py b/tests/test_existing_underbuild_nodes.py
+index 1d09e77..6a2490b 100644
+--- a/tests/test_existing_underbuild_nodes.py
++++ b/tests/test_existing_underbuild_nodes.py
+@@ -35,6 +35,80 @@ class ExistingUnderbuildIntegrationContractTests(unittest.TestCase):
+         self.assertIn("endpoint_topology_matches", source)
+         self.assertIn("list(point_layers) + [network_layer]", source)
+ 
++    def test_range_graph_includes_existing_network_in_selected_location(self):
++        source = method_source(
++            self.source[self.source.index("class UnderbuildRangeDialog"):],
++            "_build_graph",
++        )
++        self.assertIn('"JARINGAN_EKSISTING"', source)
++        self.assertIn('graph["underbuild_combined"] = True', source)
++        self.assertIn("_allowed_network_fids", self.source)
++
++    def test_existing_network_is_cloned_as_stage_jtr_overlay(self):
++        source = method_source(self.source, "apply_underbuild")
++        self.assertIn('stage_layer("JARINGAN", selected_stage)', source)
++        self.assertIn("copy_feature_attributes(overlay, feature, network_layer)", source)
++        self.assertIn("_underbuild_overlay_geometry", source)
++        self.assertIn('"JTR UNDERBUILD PADA JARINGAN EKSISTING"', source)
++        self.assertIn('pln_stage.FIELD_PARENT_UID', source)
++
++    def test_existing_source_network_is_never_mutated(self):
++        source = method_source(self.source, "apply_underbuild")
++        self.assertIn("if source_is_existing:", source)
++        self.assertIn("transaction.add_feature(", source)
++        # Perubahan atribut langsung hanya memakai layer tahap tujuan.
++        self.assertIn(
++            "transaction.snapshot_and_change(\n                        network_layer",
++            source,
++        )
++        self.assertNotIn(
++            "transaction.snapshot_and_change(\n                        source_layer",
++            source,
++        )
++
++    def test_existing_overlay_preserves_the_input_distance_fields(self):
++        source = method_source(self.source, "apply_underbuild")
++        self.assertIn("copy_feature_attributes(overlay, feature, network_layer)", source)
++        self.assertNotIn('"manual_distance":', source)
++
++    def test_existing_overlay_is_idempotent_per_stage(self):
++        source = method_source(
++            self.source, "_underbuild_overlay_for_existing"
++        )
++        self.assertIn("FIELD_PARENT_UID", source)
++        self.assertIn("same_location_scope", source)
++        self.assertIn("selected_stage", source)
++
++    def test_existing_carrier_overlay_counts_as_jtr_only(self):
++        helper = method_source(
++            self.source, "_pln_network_length_segment_flags"
++        )
++        namespace = {}
++        exec(helper, namespace)
++        flags = namespace["_pln_network_length_segment_flags"](
++            "JTR UNDERBUILD PADA JARINGAN EKSISTING",
++            "REFERENSI EKSISTING", "JTR", "Ya", "",
++        )
++        self.assertEqual((False, True, True), flags)
++
++    def test_normal_underbuild_still_counts_both_circuits(self):
++        helper = method_source(
++            self.source, "_pln_network_length_segment_flags"
++        )
++        namespace = {}
++        exec(helper, namespace)
++        flags = namespace["_pln_network_length_segment_flags"](
++            "JTM + JTR UNDERBUILD", "JTM", "JTR", "Ya", "",
++        )
++        self.assertEqual((True, True, True), flags)
++
++    def test_anchor_recap_uses_shared_overlay_classification(self):
++        source = method_source(
++            self.source, "_manual_existing_anchor_pull_rows"
++        )
++        self.assertIn("_pln_network_length_segment_flags", source)
++        self.assertIn("anchor_construction_occurrences", source)
++
+     def test_recalculation_writes_existing_anchor_in_same_transaction(self):
+         source = method_source(self.source, "_recalculate_underbuild_edit")
+         self.assertIn("same_topology_scope", source)
+diff --git a/tests/test_underbuild_termination.py b/tests/test_underbuild_termination.py
+index 90472e1..78333f8 100644
+--- a/tests/test_underbuild_termination.py
++++ b/tests/test_underbuild_termination.py
+@@ -154,6 +154,18 @@ class ExistingTopologyScopeTests(unittest.TestCase):
+             network, other_location, "", "TS-002", {("", "TS-002")}
+         ))
+ 
++    def test_existing_carrier_plus_jtr_overlay_has_one_tm4x_and_one_tr3(self):
++        existing_carrier = underbuild.anchor_construction_occurrences(
++            is_underbuild=False, has_jtm=True, has_jtr=False,
++            strict_existing=True,
++        )
++        stage_overlay = underbuild.anchor_construction_occurrences(
++            is_underbuild=True, has_jtm=False, has_jtr=True,
++            strict_existing=True,
++        )
++        self.assertEqual([("utama", "TM-4X")], existing_carrier)
++        self.assertEqual([("underbuild", "TR-3")], stage_overlay)
++
+ 
+ class Test2TwoTerminationsTests(unittest.TestCase):
+     """TEST 2/8 — dua jalur berbeda berakhir di tiang X yang sama."""
