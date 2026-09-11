@@ -1,0 +1,1101 @@
+diff -ruN SIGAMON_v6.17.16/AUDIT_v6.17.17.md SIGAMON_v6.17.17/AUDIT_v6.17.17.md
+--- SIGAMON_v6.17.16/AUDIT_v6.17.17.md	1969-12-31 19:00:00.000000000 -0500
++++ SIGAMON_v6.17.17/AUDIT_v6.17.17.md	2026-09-10 23:16:28.000000000 -0400
+@@ -0,0 +1,43 @@
++# Audit SIGAMON v6.17.17
++
++## Akar masalah
++
++`Tambah Underbuild` sebelumnya hanya membuka `TIANG_RENCANA` atau
++`TIANG_AKTUAL` sesuai tahap jaringan. `TIANG_EKSISTING` terlihat pada peta,
++tetapi tidak ikut dalam transaksi titik sehingga tidak memperoleh TR-3 dan
++sinkronisasi TM-4X pada saat underbuild diterapkan.
++
++## Perbaikan
++
++- Helper pusat `topology_layer_names()` mengembalikan layer tiang tahap aktif
++  bersama satu layer fisik `TIANG_EKSISTING`.
++- Berlaku generik untuk Rencana Awal, Rencana Akhir, dan Realisasi.
++- Picker rentang menampilkan node/label tiang serta gardu eksisting bersama
++  node tahap aktif.
++- Tambah dan Hapus Underbuild menjalankan satu transaksi atas jaringan,
++  tiang tahap, dan tiang eksisting.
++- Endpoint dicocokkan UUID-first. ID tiang hanya menjadi fallback jika salah
++  satu sisi benar-benar belum mempunyai UUID; UUID yang bertentangan ditolak.
++- Scope Judul Proyek dan Lokasi Proyek wajib sama. Garis yang sekadar berhimpit
++  dari scope lain tidak boleh ikut terbaca.
++- Tiang eksisting tidak pernah disalin ke layer tahap.
++- Pada underbuild JTM/JTR, konstruksi utama TM-4X dan konstruksi bawah TR-3
++  ditulis independen pada tiang eksisting yang sama.
++- Dua jalur yang berterminasi pada satu tiang tetap menghasilkan dua kejadian
++  TR-3 sesuai ledger topologi.
++- Penghapusan underbuild menghitung ulang titik tahap dan titik eksisting;
++  TM-4X tetap ada selama jaringan JTM masih menempel.
++
++## Yang dipertahankan
++
++- `Jarak (m)` manual tetap prioritas dan dipakai bersama oleh jaringan utama
++  serta underbuild pada gawang yang sama.
++- Geometri, BOQ, Google Spreadsheet, Preview Maps, DXF, Foto, F11, renderer,
++  dan aturan material tidak diubah.
++- Data lama tanpa UUID masih dapat memakai ID endpoint, lalu geometri sebagai
++  fallback hanya bila endpoint memang tidak membawa identitas.
++
++## Verifikasi
++
++- Tes terarah tahap, underbuild, existing connectivity, dan jarak: lulus.
++- Regression penuh: 3.448 tes lulus, 6 dilewati, 0 gagal.
+diff -ruN SIGAMON_v6.17.16/CLAUDE.md SIGAMON_v6.17.17/CLAUDE.md
+--- SIGAMON_v6.17.16/CLAUDE.md	2026-09-10 22:26:38.000000000 -0400
++++ SIGAMON_v6.17.17/CLAUDE.md	2026-09-10 23:16:28.000000000 -0400
+@@ -1,4 +1,4 @@
+-# SIGAMON v6.17.16
++# SIGAMON v6.17.17
+ 
+ Workspace pengembangan plugin QGIS SIGAMON. Judul Proyek adalah batas data
+ tertinggi: dua Judul Proyek tetap dua dataset walaupun desa, nama Lokasi
+diff -ruN SIGAMON_v6.17.16/README.txt SIGAMON_v6.17.17/README.txt
+--- SIGAMON_v6.17.16/README.txt	2026-09-10 22:26:38.000000000 -0400
++++ SIGAMON_v6.17.17/README.txt	2026-09-10 23:16:28.000000000 -0400
+@@ -1,4 +1,6 @@
+-SIGAMON v6.17.16
++SIGAMON v6.17.17
++Lihat AUDIT_v6.17.17.md untuk dukungan underbuild pada TIANG_EKSISTING di
++Rencana Awal, Rencana Akhir, dan Realisasi.
+ Lihat AUDIT_v6.17.16.md untuk warna merah/biru solid jaringan eksisting.
+ Lihat AUDIT_v6.17.15.md untuk perbaikan TM-4X/TR-3 pada tiang eksisting.
+ Lihat AUDIT_v6.17.14.md untuk sinkronisasi label dan satu jarak underbuild.
+diff -ruN SIGAMON_v6.17.16/TEST_MATRIX_v6.17.17.md SIGAMON_v6.17.17/TEST_MATRIX_v6.17.17.md
+--- SIGAMON_v6.17.16/TEST_MATRIX_v6.17.17.md	1969-12-31 19:00:00.000000000 -0500
++++ SIGAMON_v6.17.17/TEST_MATRIX_v6.17.17.md	2026-09-10 23:16:30.000000000 -0400
+@@ -0,0 +1,19 @@
++# Test Matrix SIGAMON v6.17.17
++
++| Skenario | Expected | Hasil |
++|---|---|---|
++| Rencana Awal hanya tiang eksisting | Semua endpoint valid | Lulus |
++| Rencana Akhir hanya tiang eksisting | Semua endpoint valid | Lulus |
++| Realisasi hanya tiang eksisting | Semua endpoint valid | Lulus |
++| Eksisting + tiang tahap | Satu topologi, tanpa copy tiang | Lulus |
++| Terminasi underbuild di eksisting | TR-3 pada konstruksi bawah | Lulus |
++| Terminasi SUTM di eksisting | TM-4X pada konstruksi utama | Lulus |
++| TM + TR pada satu eksisting | TM-4X dan TR-3 tidak saling menimpa | Lulus |
++| Dua underbuild bertemu | Seluruh terminasi dihitung | Lulus |
++| UUID endpoint bertentangan | Tidak fallback ke ID/posisi | Lulus |
++| Proyek/lokasi berbeda | Tidak tercampur walau berhimpit | Lulus |
++| Hapus Underbuild | TR terkait hilang; TM aktif dipertahankan | Lulus |
++| Hitung Ulang Konstruksi | Existing tetap dipindai | Lulus |
++| Jarak manual utama + underbuild | Satu nilai `Jarak (m)` tersimpan | Lulus |
++| Save/reload identitas | Tidak ada copy; UUID sumber tidak diubah | Lulus |
++| Regression penuh | 3.448 lulus, 6 dilewati, 0 gagal | Lulus |
+diff -ruN SIGAMON_v6.17.16/metadata.txt SIGAMON_v6.17.17/metadata.txt
+--- SIGAMON_v6.17.16/metadata.txt	2026-09-10 22:26:36.000000000 -0400
++++ SIGAMON_v6.17.17/metadata.txt	2026-09-10 23:16:26.000000000 -0400
+@@ -1,10 +1,11 @@
+ [general]
+-name=SIGAMON v6.17.16 Gambar, Analisis, dan Monitoring Jaringan
++name=SIGAMON v6.17.17 Gambar, Analisis, dan Monitoring Jaringan
+ qgisMinimumVersion=3.0
+ author=SIGAMON — UP2K Sulawesi Utara
+ email=
+-version=6.17.16
+-changelog=v6.17.16: Renderer JARINGAN_EKSISTING kini mengikuti warna tipe yang sama dengan Realisasi: JTM/SUTM merah solid, JTR/SUTR biru solid, dan underbuild merah-biru solid sejajar. Renderer tunggal ungu dihapus. Perubahan hanya pada penyajian; geometri, panjang, konstruksi, label, BOQ, dan data jaringan tidak berubah.
++version=6.17.17
++changelog=v6.17.17: Tambah/Hapus Underbuild kini memperlakukan TIANG_EKSISTING sebagai node topologi bersama pada Rencana Awal, Rencana Akhir, dan Realisasi. Pemilihan serta penulisan konstruksi memakai scope Judul Proyek/Lokasi Proyek dan endpoint UUID-first; ID hanya fallback data lama. TM-4X utama dan TR-3 bawah dapat tersimpan bersama pada satu tiang eksisting dalam transaksi yang sama, termasuk terminasi ganda. Tiang eksisting tidak disalin ke layer tahap. Jarak (m) manual tetap satu sumber untuk gawang utama/underbuild. Lihat AUDIT_v6.17.17.md.
++    v6.17.16: Renderer JARINGAN_EKSISTING kini mengikuti warna tipe yang sama dengan Realisasi: JTM/SUTM merah solid, JTR/SUTR biru solid, dan underbuild merah-biru solid sejajar. Renderer tunggal ungu dihapus. Perubahan hanya pada penyajian; geometri, panjang, konstruksi, label, BOQ, dan data jaringan tidak berubah.
+     v6.17.15: Hitung Ulang Konstruksi kini selalu memindai TIANG_EKSISTING meski belum memiliki cache tarikan awal. JTM yang berujung pada tiang eksisting menghasilkan TM-4X; bila bentang tersebut underbuild, tiang eksisting yang sama mendapat TR-3 pada konstruksi bawah, bukan TR-3 pada tiang rencana tetangga. Gardu dan JTR biasa tetap mempertahankan aturan TR-7. Pembacaan memakai endpoint UUID/ID plus verifikasi posisi fisik.
+     v6.17.14: Label jaringan kini mengutamakan manual_distance sebelum jarak_target dan langsung di-refresh setelah koreksi/reset. Pasangan jaringan utama dan underbuild dengan endpoint serta scope proyek/tahap yang sama memakai satu override jarak dan diperbarui dalam satu transaksi. Geometri tidak berubah; Detail Tarikan tetap satu kolom Jarak (m) dan read-only.
+     v6.17.13: Koreksi jarak kecil dipindahkan khusus ke Tools - Alat Peta - Edit Jarak Gawang. Pengguna memilih segmen yang terlihat, melihat jarak geometri/perhitungan/status, lalu mengubah atau mereset override tanpa mengubah geometri. Tampilan BOQ dan Detail Tarikan kembali seperti sebelum fitur koreksi jarak; nilai koreksi tetap dipakai oleh mesin perhitungan.
+diff -ruN SIGAMON_v6.17.16/plugin.py SIGAMON_v6.17.17/plugin.py
+--- SIGAMON_v6.17.16/plugin.py	2026-09-10 22:26:36.000000000 -0400
++++ SIGAMON_v6.17.17/plugin.py	2026-09-10 23:16:26.000000000 -0400
+@@ -417,7 +417,7 @@
+             return None
+ 
+ # Versi plugin untuk ditampilkan kecil pada header panel (informasi saja).
+-PLN_TOOLS_VERSION = "v6.17.16"
++PLN_TOOLS_VERSION = "v6.17.17"
+ DXF_LAST_EXPORT_FOLDER_KEY = "PLNTools/dxf_last_export_folder"
+ PREVIEW_LAST_EXPORT_FOLDER_KEY = "PLNTools/preview_last_export_folder"
+ 
+@@ -14270,11 +14270,19 @@
+         "Aktual": "JARINGAN_AKTUAL",
+         "Eksisting": "JARINGAN_EKSISTING",
+     }
+-    POINT_LAYER_MAP = {
+-        "Rencana": ("GARDU_RENCANA", "TIANG_RENCANA"),
+-        "Aktual": ("GARDU_AKTUAL", "TIANG_AKTUAL"),
+-        "Eksisting": ("GARDU_EKSISTING", "TIANG_EKSISTING"),
+-    }
++    POINT_LAYER_MAP = {
++        # Tiang/Gardu Eksisting adalah node fisik bersama. Ia ikut sebagai
++        # kandidat label/pick pada setiap tahap tanpa pernah diduplikasi.
++        "Rencana": (
++            "GARDU_RENCANA", "TIANG_RENCANA",
++            "GARDU_EKSISTING", "TIANG_EKSISTING",
++        ),
++        "Aktual": (
++            "GARDU_AKTUAL", "TIANG_AKTUAL",
++            "GARDU_EKSISTING", "TIANG_EKSISTING",
++        ),
++        "Eksisting": ("GARDU_EKSISTING", "TIANG_EKSISTING"),
++    }
+ 
+     def __init__(self, dashboard):
+         super().__init__(dashboard)
+@@ -15532,31 +15540,41 @@
+         if answer != QMessageBox.Yes:
+             return
+ 
+-        network_layer = graph.get("layer")
+-        status = str(graph.get("status") or _pln_internal_status(self.cbo_data))
+-        point_layer = self.plugin.get_layer("TIANG_{}".format(status.upper()))
+-        if network_layer is None or point_layer is None:
+-            QMessageBox.warning(
+-                self, "Tambah Underbuild",
+-                "Layer jaringan atau tiang {} tidak ditemukan.".format(status)
+-            )
+-            return
++        network_layer = graph.get("layer")
++        status = str(graph.get("status") or _pln_internal_status(self.cbo_data))
++        selected_stage = pln_stage.normalize_stage(self.cbo_data.currentText())
++        point_layers = self.plugin.topology_point_layers_for_stage(
++            selected_stage, include_gardu=False
++        )
++        if network_layer is None or not point_layers:
++            QMessageBox.warning(
++                self, "Tambah Underbuild",
++                "Layer jaringan atau node tiang {} tidak ditemukan.".format(status)
++            )
++            return
+         try:
+             if not self.plugin._manual_prepare_schema(
+                 network_layer, self.plugin._manual_network_field_specs(), line=True
+             ):
+                 raise RuntimeError("Field jaringan belum siap.")
+-            if not self.plugin._manual_prepare_schema(
+-                point_layer, self.plugin._manual_point_field_specs(), line=False
+-            ):
+-                raise RuntimeError("Field tiang belum siap.")
++            for point_layer in point_layers:
++                if not self.plugin._manual_prepare_schema(
++                    point_layer, self.plugin._manual_point_field_specs(),
++                    line=False,
++                ):
++                    raise RuntimeError(
++                        "Field tiang {} belum siap.".format(
++                            point_layer.name()
++                        )
++                    )
+         except Exception as exc:
+             QMessageBox.warning(self, "Tambah Underbuild", str(exc))
+             return
+ 
+         target_features = []
+-        component_ids = set()
+-        endpoint_ids = set()
++        component_ids = set()
++        endpoint_ids = set()
++        endpoint_pairs = set()
+         already_underbuild = 0
+         seen_fids = set()
+         for edge_key in self._path_edges:
+@@ -15579,12 +15597,23 @@
+             ).strip()
+             if component_id:
+                 component_ids.add(component_id)
+-            for field_name in ("dari_tiang", "ke_tiang"):
+-                value = str(
+-                    self.plugin.get_feature_value_safe(feature, field_name, "") or ""
+-                ).strip()
+-                if value:
+-                    endpoint_ids.add(value)
++            for uuid_field, id_field in (
++                    (FROM_UUID_FIELD, "dari_tiang"),
++                    (TO_UUID_FIELD, "ke_tiang")):
++                endpoint_uuid = str(
++                    self.plugin.get_feature_value_safe(
++                        feature, uuid_field, ""
++                    ) or ""
++                ).strip()
++                endpoint_id = str(
++                    self.plugin.get_feature_value_safe(
++                        feature, id_field, ""
++                    ) or ""
++                ).strip()
++                if endpoint_uuid or endpoint_id:
++                    endpoint_pairs.add((endpoint_uuid, endpoint_id))
++                if endpoint_id:
++                    endpoint_ids.add(endpoint_id)
+ 
+         if not target_features:
+             QMessageBox.information(
+@@ -15598,11 +15627,11 @@
+                 self.plugin._engineering_feature_values(f)) for f in target_features):
+             QMessageBox.warning(self, "Tambah Underbuild", "Pilih jalur dalam satu lokasi dan tahap data.")
+             return
+-        path_id = new_feature_uuid()
+-        transaction = ClickTransaction(
+-            [point_layer, network_layer],
+-            "SIGAMON - tambah underbuild dari titik ke titik",
+-        )
++        path_id = new_feature_uuid()
++        transaction = ClickTransaction(
++            list(point_layers) + [network_layer],
++            "SIGAMON - tambah underbuild dari titik ke titik",
++        )
+         changed = 0
+         try:
+             transaction.begin()
+@@ -15624,83 +15653,104 @@
+                 )
+                 changed += 1
+ 
+-            if endpoint_ids:
+-                for point in point_layer.getFeatures():
+-                    if not pln_underbuild.same_scope(engineering_scope,
+-                            self.plugin._engineering_feature_values(point)):
+-                        continue
+-                    pole_id = str(
+-                        self.plugin.get_feature_value_safe(point, "id_tiang", "") or ""
+-                    ).strip()
+-                    if pole_id not in endpoint_ids:
+-                        continue
+-                    point_updates = {
+-                        "status_underbuild": "Ya",
+-                        "ada_jtr": "Ya",
+-                        "tipe_jaringan": "JTM + JTR UNDERBUILD",
+-                    }
+-                    # v442: Tambah Underbuild tidak boleh mewarisi identitas
+-                    # Gardu/TR-7 dari cache lama pada tiang TM biasa. Bersihkan
+-                    # sumber tarikan awal sebelum Hitung Ulang; evaluator akan
+-                    # membangun konstruksi bawah lagi dari topologi aktif.
+-                    if (
+-                        not self.plugin.tiang_has_current_gardu_evidence(
+-                            point_layer, point
+-                        )
+-                        and not self.plugin._manual_anchor_is_strict_existing_tiang(
+-                            point_layer, point
+-                        )
+-                    ):
+-                        point_updates.update({
+-                            "status_gardu": 0,
+-                            "status_tarikan_awal": 0,
+-                            "jenis_tarikan_awal": "",
+-                            "jumlah_tarikan_awal": 0,
+-                            "tarikan_awal_rekap": "",
+-                        })
+-                        for _slot in range(1, 5):
+-                            point_updates["tarikan_awal_kode_{}".format(_slot)] = ""
+-                            point_updates["tarikan_awal_status_{}".format(_slot)] = ""
+-                            point_updates["tarikan_awal_bagian_{}".format(_slot)] = ""
+-                        # Bersihkan hanya TR-7 stale dari konstruksi bawah.
+-                        # Kode bawah lain dipertahankan bila titik juga menjadi
+-                        # endpoint underbuild lain yang memang masih aktif.
+-                        _remaining_lower = []
+-                        for _slot in range(1, 5):
+-                            _field = "konstruksi_bawah_{}".format(_slot)
+-                            _value = str(self.plugin.get_feature_value_safe(
+-                                point, _field, ""
+-                            ) or "").strip()
+-                            if canonicalize_construction(_value) == "TR-7":
+-                                point_updates[_field] = ""
+-                            elif _value:
+-                                _remaining_lower.append(_value)
+-                        for _field in (
+-                            "konstruksi_bawah_digunakan",
+-                            "konstruksi_bawah_otomatis",
+-                        ):
+-                            _value = str(self.plugin.get_feature_value_safe(
+-                                point, _field, ""
+-                            ) or "").strip()
+-                            if canonicalize_construction(_value) == "TR-7":
+-                                point_updates[_field] = ""
+-                        if point_layer.fields().indexFromName("konstruksi_bawah") >= 0:
+-                            point_updates["konstruksi_bawah"] = self.plugin.combine_konstruksi_bawah(
+-                                *(_remaining_lower + ["", "", "", ""])[:4]
+-                            )
+-                    point_updates = {
+-                        name: value for name, value in point_updates.items()
+-                        if point_layer.fields().indexFromName(name) >= 0
+-                    }
+-                    if point_updates:
+-                        transaction.snapshot_and_change(
+-                            point_layer, point.id(), point_updates
+-                        )
+-
+-            self.plugin._recalculate_underbuild_edit(
+-                point_layer, network_layer, engineering_scope,
+-                component_ids, endpoint_ids, transaction,
+-            )
++            if endpoint_pairs:
++                for point_layer in point_layers:
++                    for point in point_layer.getFeatures():
++                        point_values = self.plugin._engineering_feature_values(
++                            point
++                        )
++                        if not pln_underbuild.same_topology_scope(
++                                engineering_scope, point_values):
++                            continue
++                        pole_id = str(
++                            self.plugin.get_feature_value_safe(
++                                point, "id_tiang", ""
++                            ) or ""
++                        ).strip()
++                        pole_uuid = str(
++                            self.plugin.get_feature_value_safe(
++                                point, UUID_FIELD, ""
++                            ) or ""
++                        ).strip()
++                        if not pln_underbuild.endpoint_identity_matches(
++                                pole_uuid, pole_id, endpoint_pairs):
++                            continue
++                        point_updates = {
++                            "status_underbuild": "Ya",
++                            "ada_jtr": "Ya",
++                            "tipe_jaringan": "JTM + JTR UNDERBUILD",
++                        }
++                        # Tambah Underbuild tidak boleh mewarisi identitas
++                        # Gardu/TR-7 dari cache lama pada tiang TM biasa.
++                        # Evaluator membangun ulang konstruksi bawah dari
++                        # topologi aktif setelah atribut stale dibersihkan.
++                        if (
++                            not self.plugin.tiang_has_current_gardu_evidence(
++                                point_layer, point
++                            )
++                            and not self.plugin._manual_anchor_is_strict_existing_tiang(
++                                point_layer, point
++                            )
++                        ):
++                            point_updates.update({
++                                "status_gardu": 0,
++                                "status_tarikan_awal": 0,
++                                "jenis_tarikan_awal": "",
++                                "jumlah_tarikan_awal": 0,
++                                "tarikan_awal_rekap": "",
++                            })
++                            for _slot in range(1, 5):
++                                point_updates[
++                                    "tarikan_awal_kode_{}".format(_slot)
++                                ] = ""
++                                point_updates[
++                                    "tarikan_awal_status_{}".format(_slot)
++                                ] = ""
++                                point_updates[
++                                    "tarikan_awal_bagian_{}".format(_slot)
++                                ] = ""
++                            # Bersihkan hanya TR-7 stale. Kode bawah lain
++                            # dipertahankan bila titik juga menjadi endpoint
++                            # underbuild aktif yang lain.
++                            _remaining_lower = []
++                            for _slot in range(1, 5):
++                                _field = "konstruksi_bawah_{}".format(_slot)
++                                _value = str(self.plugin.get_feature_value_safe(
++                                    point, _field, ""
++                                ) or "").strip()
++                                if canonicalize_construction(_value) == "TR-7":
++                                    point_updates[_field] = ""
++                                elif _value:
++                                    _remaining_lower.append(_value)
++                            for _field in (
++                                "konstruksi_bawah_digunakan",
++                                "konstruksi_bawah_otomatis",
++                            ):
++                                _value = str(self.plugin.get_feature_value_safe(
++                                    point, _field, ""
++                                ) or "").strip()
++                                if canonicalize_construction(_value) == "TR-7":
++                                    point_updates[_field] = ""
++                            if point_layer.fields().indexFromName(
++                                    "konstruksi_bawah") >= 0:
++                                point_updates["konstruksi_bawah"] = self.plugin.combine_konstruksi_bawah(
++                                    *(_remaining_lower + ["", "", "", ""])[:4]
++                                )
++                        point_updates = {
++                            name: value
++                            for name, value in point_updates.items()
++                            if point_layer.fields().indexFromName(name) >= 0
++                        }
++                        if point_updates:
++                            transaction.snapshot_and_change(
++                                point_layer, point.id(), point_updates
++                            )
++
++            self.plugin._recalculate_underbuild_edit(
++                point_layers, network_layer, engineering_scope,
++                component_ids, endpoint_ids, transaction,
++                endpoint_pairs=endpoint_pairs,
++            )
+             transaction.commit()
+             self._applied_underbuild = True
+         except Exception as exc:
+@@ -15719,9 +15769,10 @@
+         # berhasil. Kegagalan membaca dropdown/menulis metadata tidak boleh
+         # membatalkan geometri dan atribut underbuild yang sudah tersimpan.
+         try:
+-            self.plugin._refresh_after_manual_network_change(
+-                point_layer, network_layer
+-            )
++            for point_layer in point_layers:
++                self.plugin._refresh_after_manual_network_change(
++                    point_layer, network_layer
++                )
+             self.plugin.apply_jaringan_style(network_layer)
+             self.plugin._schedule_manual_dashboard_refresh(80, force=True)
+             QgsProject.instance().setDirty(True)
+@@ -59967,7 +60018,8 @@
+         # TR-7 eksklusif untuk tarikan awal dari Gardu
+         # Rencana/Aktual/Eksisting (termasuk Gardu Cantol) atau Tiang
+         # Eksisting. Tiang Rencana/Aktual biasa tidak menjadi sumber TR-7.
+-        allow_tr7 = bool(allow_tm4x or anchor_is_gardu)
++        allow_tr7 = bool(allow_tm4x or anchor_is_gardu)
++        anchor_scope = self._engineering_feature_values(anchor_feature)
+ 
+         rows_by_key = {}
+         for layer_name, work_status in (
+@@ -60070,8 +60122,12 @@
+                 except Exception:
+                     pass
+ 
+-            for segment in candidates_by_fid.values():
+-                network_text = " ".join(
++            for segment in candidates_by_fid.values():
++                segment_scope = self._engineering_feature_values(segment)
++                if not pln_underbuild.same_topology_scope(
++                        segment_scope, anchor_scope):
++                    continue
++                network_text = " ".join(
+                     str(self.get_feature_value_safe(segment, name, "") or "")
+                     for name in (
+                         "jenis_jaringan", "tipe_jaringan", "jaringan_utama",
+@@ -60103,19 +60159,7 @@
+                 to_uuid = str(self.get_feature_value_safe(segment, TO_UUID_FIELD, "") or "").strip()
+                 from_id = str(self.get_feature_value_safe(segment, "dari_tiang", "") or "").strip()
+                 to_id = str(self.get_feature_value_safe(segment, "ke_tiang", "") or "").strip()
+-                # UUID adalah identitas utama. ID lama hanya boleh menjadi
+-                # fallback bila UUID endpoint kosong; ID seperti TS-002 dapat
+-                # berulang pada desa/proyek lain.
+-                from_identity = bool(
+-                    (anchor_uuid and from_uuid == anchor_uuid)
+-                    or (anchor_id and not from_uuid and from_id == anchor_id)
+-                )
+-                to_identity = bool(
+-                    (anchor_uuid and to_uuid == anchor_uuid)
+-                    or (anchor_id and not to_uuid and to_id == anchor_id)
+-                )
+-
+-                try:
++                try:
+                     points = self._polyline_points(segment.geometry())
+                 except Exception:
+                     points = []
+@@ -60131,10 +60175,20 @@
+                 # tetap wajib dibuktikan oleh endpoint yang benar-benar menempel.
+                 # Karena itu relasi atribut stale tidak menggagalkan edge yang
+                 # sah, tetapi garis yang sekadar melintas tetap ditolak.
+-                if min(first_distance, last_distance) > 0.50:
+-                    continue
+-                from_match = first_distance <= last_distance
+-                edge_uuid = str(
++                if min(first_distance, last_distance) > 0.50:
++                    continue
++                from_match = first_distance <= last_distance
++                nearest_uuid = from_uuid if from_match else to_uuid
++                nearest_id = from_id if from_match else to_id
++                # Geometri hanya membuktikan bahwa titik berhimpit. Bila
++                # endpoint mempunyai identitas, UUID tetap menjadi hakim
++                # utama dan konflik UUID tidak boleh ditutupi oleh ID/posisi.
++                if nearest_uuid or nearest_id:
++                    if not pln_underbuild.endpoint_identity_matches(
++                            anchor_uuid, anchor_id,
++                            {(nearest_uuid, nearest_id)}):
++                        continue
++                edge_uuid = str(
+                     self.get_feature_value_safe(
+                         segment, UUID_FIELD, ""
+                     ) or ""
+@@ -69103,14 +69157,21 @@
+         self.stop_main_canvas_point_move(show_message=False)
+         self.finish_draw_session(show_message=False)
+ 
+-    def _recalculate_underbuild_edit(self, point_layer, network_layer, scope,
+-                                    component_ids, endpoint_ids, transaction):
+-        """One transaction: scoped topology, then reconcile the lower ledger."""
+-        for component_id in sorted(component_ids):
+-            self._recalculate_component_constructions(
+-                point_layer, network_layer, component_id,
+-                finalize=True, classification_hint="TM", transaction=transaction,
+-                affected_ids=endpoint_ids, strict_affected=True,
++    def _recalculate_underbuild_edit(
++            self, point_layers, network_layer, scope, component_ids,
++            endpoint_ids, transaction, endpoint_pairs=None):
++        """One transaction: stage topology plus shared Existing endpoints."""
++        if not isinstance(point_layers, (list, tuple)):
++            point_layers = [point_layers]
++        point_layers = [layer for layer in point_layers if layer is not None]
++        stage_point_layer = self.stage_layer("TIANG", scope.get("tahap_data"))
++        for component_id in sorted(component_ids):
++            if stage_point_layer is None:
++                break
++            self._recalculate_component_constructions(
++                stage_point_layer, network_layer, component_id,
++                finalize=True, classification_hint="TM", transaction=transaction,
++                affected_ids=endpoint_ids, strict_affected=True,
+                 allow_invalid_angle_fallback=True, sync_gardu_symbols=False,
+                 engineering_scope=scope,
+             )
+@@ -69120,69 +69181,148 @@
+             if pln_underbuild.same_scope(scope, values):
+                 values["fid"] = int(feature.id())
+                 segments.append(values)
+-        for point in point_layer.getFeatures():
+-            values = self._engineering_feature_values(point)
+-            if (not pln_underbuild.same_scope(scope, values)
+-                    or values["id_tiang"] not in endpoint_ids):
+-                continue
+-            keys = pln_underbuild.pole_identity(values)
+-            incident = pln_underbuild.incident_underbuild_segments(keys, segments)
+-            updates = {"status_underbuild": "Ya" if incident else "Tidak",
+-                       "ada_jtr": "Ya" if incident else "Tidak",
+-                       "tipe_jaringan": "JTM + JTR UNDERBUILD" if incident else "JTM"}
+-            source = self.tiang_has_current_gardu_evidence(point_layer, point)
+-            source = source or self._manual_anchor_is_strict_existing_tiang(point_layer, point)
+-            count = pln_underbuild.termination_count(keys, incident, minimum=0)
+-            if count > pln_underbuild.SLOT_LIMIT:
+-                raise ValueError("Tiang {} melebihi empat slot konstruksi bawah.".format(values["id_tiang"]))
+-            if not incident or (count and not source):
+-                slots = pln_underbuild.slot_values("TR-3", count if incident else 0)
+-                updates.update({"konstruksi_bawah_{}".format(i+1): v for i, v in enumerate(slots)})
+-                updates.update({
+-                    "konstruksi_bawah": self.combine_konstruksi_bawah(*slots),
+-                    "konstruksi_bawah_digunakan": slots[0],
+-                    "konstruksi_bawah_otomatis": slots[0],
+-                    "sumber_konstruksi_bawah": "OTOMATIS_TERMINASI_UNDERBUILD" if incident else "",
+-                    "catatan_konstruksi_bawah": "{} terminasi underbuild".format(count) if incident else "",
+-                })
+-                if not incident:
+-                    for i in range(1, 5):
+-                        if pln_stage.clean(self.get_feature_value_safe(
+-                                point, "tarikan_awal_bagian_{}".format(i), "")) == "bawah":
+-                            for suffix in ("kode", "status", "bagian"):
+-                                updates["tarikan_awal_{}_{}".format(suffix, i)] = ""
+-                main = self.get_feature_value_safe(point, "tipe_konstruksi_digunakan", "") or self.get_feature_value_safe(point, "konstruksi", "")
+-                label = self.build_label_konstruksi(main, *slots,
+-                    gardu=self.get_feature_value_safe(point, "konstruksi_gardu", ""))
+-                updates["label_konstruksi"] = label
+-                updates["showlabel_tiang"] = self.build_tiang_showlabel_text(values["id_tiang"], label)
+-            transaction.snapshot_and_change(point_layer, point.id(), {
+-                key: value for key, value in updates.items()
+-                if point_layer.fields().indexFromName(key) >= 0
+-            })
++        endpoint_pairs = set(endpoint_pairs or ())
++        for point_layer in point_layers:
++            for point in point_layer.getFeatures():
++                values = self._engineering_feature_values(point)
++                if not pln_underbuild.same_topology_scope(scope, values):
++                    continue
++                if endpoint_pairs:
++                    if not pln_underbuild.endpoint_identity_matches(
++                            values.get(UUID_FIELD), values.get("id_tiang"),
++                            endpoint_pairs):
++                        continue
++                elif values["id_tiang"] not in endpoint_ids:
++                    continue
++                keys = pln_underbuild.pole_identity(values)
++                incident = pln_underbuild.incident_underbuild_segments(
++                    keys, segments
++                )
++                updates = {
++                    "status_underbuild": "Ya" if incident else "Tidak",
++                    "ada_jtr": "Ya" if incident else "Tidak",
++                    "tipe_jaringan": (
++                        "JTM + JTR UNDERBUILD" if incident else "JTM"
++                    ),
++                }
++                is_gardu = self.tiang_has_current_gardu_evidence(
++                    point_layer, point
++                )
++                is_existing = self._manual_anchor_is_strict_existing_tiang(
++                    point_layer, point
++                )
++                source = bool(is_gardu or is_existing)
++                count = pln_underbuild.termination_count(
++                    keys, incident, minimum=0
++                )
++                if count > pln_underbuild.SLOT_LIMIT:
++                    raise ValueError(
++                        "Tiang {} melebihi empat slot konstruksi bawah."
++                        .format(values["id_tiang"])
++                    )
++                # Gardu tetap dikelola oleh aturan sumber TR-7. Tiang
++                # Eksisting berbeda: ia boleh menyimpan TM-4X utama sekaligus
++                # TR-3 bawah saat underbuild berterminasi di node yang sama.
++                if not incident or not source or is_existing:
++                    slots = pln_underbuild.slot_values(
++                        "TR-3", count if incident else 0
++                    )
++                    updates.update({
++                        "konstruksi_bawah_{}".format(i + 1): value
++                        for i, value in enumerate(slots)
++                    })
++                    updates.update({
++                        "konstruksi_bawah": self.combine_konstruksi_bawah(
++                            *slots
++                        ),
++                        "konstruksi_bawah_digunakan": slots[0],
++                        "konstruksi_bawah_otomatis": slots[0],
++                        "sumber_konstruksi_bawah": (
++                            "OTOMATIS_TERMINASI_UNDERBUILD"
++                            if incident else ""
++                        ),
++                        "catatan_konstruksi_bawah": (
++                            "{} terminasi underbuild".format(count)
++                            if incident else ""
++                        ),
++                    })
++                    if not incident:
++                        for i in range(1, 5):
++                            if pln_stage.clean(self.get_feature_value_safe(
++                                    point,
++                                    "tarikan_awal_bagian_{}".format(i),
++                                    "")) == "bawah":
++                                for suffix in ("kode", "status", "bagian"):
++                                    updates[
++                                        "tarikan_awal_{}_{}".format(
++                                            suffix, i
++                                        )
++                                    ] = ""
++                    main = (
++                        self.get_feature_value_safe(
++                            point, "tipe_konstruksi_digunakan", ""
++                        )
++                        or self.get_feature_value_safe(
++                            point, "konstruksi", ""
++                        )
++                    )
++                    label = self.build_label_konstruksi(
++                        main, *slots,
++                        gardu=self.get_feature_value_safe(
++                            point, "konstruksi_gardu", ""
++                        )
++                    )
++                    updates["label_konstruksi"] = label
++                    updates["showlabel_tiang"] = (
++                        self.build_tiang_showlabel_text(
++                            values["id_tiang"], label
++                        )
++                    )
++                transaction.snapshot_and_change(point_layer, point.id(), {
++                    key: value for key, value in updates.items()
++                    if point_layer.fields().indexFromName(key) >= 0
++                })
++                if is_existing:
++                    # Membaca network edit-buffer yang sama, sehingga TM-4X
++                    # dan TR-3 ditulis atomik sebelum commit dan tidak menunggu
++                    # tombol Hitung Ulang berikutnya.
++                    self._sync_existing_anchor_pull_feature(
++                        point_layer, point, transaction
++                    )
+ 
+-    def delete_underbuild_path(self, layer, selected):
+-        """Remove only the selected logical lower route; keep its JTM support."""
+-        scope = self._engineering_feature_values(selected)
+-        route = pln_stage.clean(self.get_feature_value_safe(selected, "underbuild_path_id", ""))
+-        if not route:
+-            raise ValueError("Tarikan lama belum memiliki ID underbuild. Identitasnya perlu dipulihkan sebelum penghapusan aman.")
+-        point_layer = self.stage_layer("TIANG", scope["tahap_data"])
+-        if point_layer is None:
+-            raise ValueError("Layer tiang tahap terpilih tidak tersedia.")
+-        targets, endpoints, components = [], set(), set()
+-        for feature in layer.getFeatures():
+-            values = self._engineering_feature_values(feature)
+-            if (pln_underbuild.same_scope(scope, values)
+-                    and values.get("underbuild_path_id") == route
+-                    and pln_underbuild.is_underbuild(values)):
+-                targets.append(feature)
+-                endpoints.update(filter(None, (values["dari_tiang"], values["ke_tiang"])))
+-                if values["id_jalur"]:
+-                    components.add(values["id_jalur"])
+-        if not targets:
+-            raise ValueError("Underbuild tidak ditemukan pada lokasi/tahap terpilih.")
+-        transaction = ClickTransaction([point_layer, layer], "SIGAMON - Hapus Underbuild")
++    def delete_underbuild_path(self, layer, selected):
++        """Remove only the selected logical lower route; keep its JTM support."""
++        scope = self._engineering_feature_values(selected)
++        route = pln_stage.clean(self.get_feature_value_safe(selected, "underbuild_path_id", ""))
++        if not route:
++            raise ValueError("Tarikan lama belum memiliki ID underbuild. Identitasnya perlu dipulihkan sebelum penghapusan aman.")
++        point_layers = self.topology_point_layers_for_stage(
++            scope["tahap_data"], include_gardu=False
++        )
++        if not point_layers:
++            raise ValueError("Layer node tiang tahap terpilih tidak tersedia.")
++        targets, endpoints, endpoint_pairs, components = [], set(), set(), set()
++        for feature in layer.getFeatures():
++            values = self._engineering_feature_values(feature)
++            if (pln_underbuild.same_scope(scope, values)
++                    and values.get("underbuild_path_id") == route
++                    and pln_underbuild.is_underbuild(values)):
++                targets.append(feature)
++                endpoints.update(filter(None, (values["dari_tiang"], values["ke_tiang"])))
++                endpoint_pairs.update(filter(
++                    lambda pair: pair[0] or pair[1],
++                    (
++                        (values.get(FROM_UUID_FIELD), values["dari_tiang"]),
++                        (values.get(TO_UUID_FIELD), values["ke_tiang"]),
++                    ),
++                ))
++                if values["id_jalur"]:
++                    components.add(values["id_jalur"])
++        if not targets:
++            raise ValueError("Underbuild tidak ditemukan pada lokasi/tahap terpilih.")
++        transaction = ClickTransaction(
++            list(point_layers) + [layer], "SIGAMON - Hapus Underbuild"
++        )
+         try:
+             transaction.begin()
+             for feature in targets:
+@@ -69200,13 +69340,16 @@
+                     })
+                 else:
+                     transaction.snapshot_and_delete(layer, feature.id())
+-            self._recalculate_underbuild_edit(point_layer, layer, scope,
+-                                             components, endpoints, transaction)
+-            transaction.commit()
++            self._recalculate_underbuild_edit(
++                point_layers, layer, scope, components, endpoints,
++                transaction, endpoint_pairs=endpoint_pairs,
++            )
++            transaction.commit()
+         except Exception:
+             transaction.abort()
+             raise
+-        self._refresh_after_manual_network_change(point_layer, layer)
++        for point_layer in point_layers:
++            self._refresh_after_manual_network_change(point_layer, layer)
+         self._schedule_manual_dashboard_refresh(80, force=True)
+         self._pln_f11_location_values_cache = None
+         QgsProject.instance().setDirty(True)
+@@ -83477,16 +83620,39 @@
+         "id_proyek",
+     ) + tuple(LENGTH_FIELD_PRIORITY)
+ 
+-    def stage_layer(self, kind, stage):
++    def stage_layer(self, kind, stage):
+         """Layer teknis untuk satu jenis objek pada satu tahap.
+ 
+         Rencana Awal dan Rencana Akhir mengembalikan layer yang SAMA
+         (``*_RENCANA``); yang memisahkan keduanya adalah ``tahap_data``.
+         """
+         suffix = pln_stage.layer_suffix_for_stage(stage, "")
+-        if not suffix:
+-            return None
+-        return self.get_layer("{}_{}".format(str(kind).upper(), suffix))
++        if not suffix:
++            return None
++        return self.get_layer("{}_{}".format(str(kind).upper(), suffix))
++
++    def topology_point_layers_for_stage(self, stage, include_gardu=False):
++        """Layer titik tahap aktif ditambah Existing sebagai node bersama.
++
++        Tidak ada feature yang disalin. Helper hanya mengembalikan layer fisik
++        existing dan layer tahap yang sudah ada, sehingga satu objek fisik
++        tetap satu data dengan UUID yang sama.
++        """
++        kinds = ("TIANG", "GARDU") if include_gardu else ("TIANG",)
++        result = []
++        seen = set()
++        for kind in kinds:
++            for name in pln_stage.topology_layer_names(
++                    kind, stage, include_existing=True):
++                layer = self.get_layer(name)
++                if layer is None or not layer.isValid():
++                    continue
++                key = str(layer.id())
++                if key in seen:
++                    continue
++                seen.add(key)
++                result.append(layer)
++        return result
+ 
+     @staticmethod
+     def _stage_row_in_location(values, location_id="", location_name="",
+diff -ruN SIGAMON_v6.17.16/stage_model.py SIGAMON_v6.17.17/stage_model.py
+--- SIGAMON_v6.17.16/stage_model.py	2026-09-08 22:26:36.000000000 -0400
++++ SIGAMON_v6.17.17/stage_model.py	2026-09-10 22:52:54.000000000 -0400
+@@ -224,6 +224,27 @@
+     return _STAGE_TO_LAYER_SUFFIX.get(normalize_stage(stage), default)
+ 
+ 
++def topology_layer_names(kind, stage, include_existing=True):
++    """Nama layer node valid untuk satu tahap jaringan.
++
++    Existing adalah referensi fisik bersama, bukan tahap baru. Karena itu
++    jaringan Rencana Awal/Akhir memakai layer tahap ``*_RENCANA`` *dan*
++    ``*_EKSISTING``; Realisasi memakai ``*_AKTUAL`` dan ``*_EKSISTING``.
++    Urutan ini penting: objek tahap dicari lebih dulu, Existing menjadi node
++    bersama tanpa pernah disalin atau diduplikasi ke layer tahap.
++    """
++    object_kind = clean(kind).upper()
++    normalized = normalize_stage(stage)
++    if not object_kind or normalized not in BOQ_STAGES:
++        return ()
++    names = ["{}_{}".format(
++        object_kind, layer_suffix_for_stage(normalized, "")
++    )]
++    if include_existing:
++        names.append("{}_EKSISTING".format(object_kind))
++    return tuple(name for name in names if name and not name.endswith("_"))
++
++
+ # ---------------------------------------------------------------------------
+ # MEMBACA TAHAP SEBUAH FEATURE
+ # ---------------------------------------------------------------------------
+diff -ruN SIGAMON_v6.17.16/tests/test_audit_implementation.py SIGAMON_v6.17.17/tests/test_audit_implementation.py
+--- SIGAMON_v6.17.16/tests/test_audit_implementation.py	2026-09-10 10:42:34.000000000 -0400
++++ SIGAMON_v6.17.17/tests/test_audit_implementation.py	2026-09-10 22:59:06.000000000 -0400
+@@ -20,6 +20,8 @@
+     node=copy.deepcopy(METHODS[name]);node.decorator_list=[]
+     ctx=dict(pln_underbuild=ub,pln_stage=stage,pln_project_scope=scope,pln_boq=boq,pln_material=material,
+         QgsVectorLayer=Layer,QgsFeatureRequest=Request,ClickTransaction=Transaction,
++        FROM_UUID_FIELD='from_feature_uuid',TO_UUID_FIELD='to_feature_uuid',
++        UUID_FIELD='feature_uuid',
+         canonicalize_construction=lambda v:str(v or '').upper(),
+         QgsProject=NS(instance=lambda:NS(setDirty=lambda v:None)),
+         QgsMessageLog=NS(logMessage=lambda *a:None),Qgis=NS(Warning=1,Info=0))
+@@ -86,6 +88,7 @@
+             build_tiang_showlabel_text=lambda self,pid,label:pid+' '+label
+             _refresh_after_manual_network_change=lambda *a:None
+             _schedule_manual_dashboard_refresh=lambda *a,**k:None
++            _sync_existing_anchor_pull_feature=lambda *a,**k:None
+         Harness._recalculate_underbuild_edit=method('_recalculate_underbuild_edit')
+         Harness.delete_underbuild_path=method('delete_underbuild_path')
+         self.h=Harness()
+@@ -93,6 +96,7 @@
+         self.lines=Layer('JARINGAN_RENCANA',[segment(1,'A'),segment(2,'B'),
+             segment(3,'B','X2',data_stage=stage.STAGE_RENCANA_AKHIR),segment(4,'B','X9',project='P27')])
+         self.h.stage_layer=lambda *a:self.poles
++        self.h.topology_point_layers_for_stage=lambda *a,**k:[self.poles]
+     def test_distinct_paths_same_jtm_route_terminate_twice(self):
+         self.assertEqual(2,ub.termination_count(ub.pole_identity(pole()),self.lines.features[:2],0))
+     def test_continuous_path_does_not_terminate(self):
+diff -ruN SIGAMON_v6.17.16/tests/test_existing_underbuild_nodes.py SIGAMON_v6.17.17/tests/test_existing_underbuild_nodes.py
+--- SIGAMON_v6.17.16/tests/test_existing_underbuild_nodes.py	1969-12-31 19:00:00.000000000 -0500
++++ SIGAMON_v6.17.17/tests/test_existing_underbuild_nodes.py	2026-09-10 22:58:28.000000000 -0400
+@@ -0,0 +1,60 @@
++# -*- coding: utf-8 -*-
++"""Kontrak integrasi underbuild: TIANG_EKSISTING adalah node nyata bersama."""
++import ast
++import unittest
++
++import _bootstrap
++from _bootstrap import read_module
++
++
++def method_source(source, name):
++    tree = ast.parse(source)
++    for node in ast.walk(tree):
++        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
++            return ast.get_source_segment(source, node) or ""
++    raise AssertionError("Method {} tidak ditemukan".format(name))
++
++
++class ExistingUnderbuildIntegrationContractTests(unittest.TestCase):
++    @classmethod
++    def setUpClass(cls):
++        cls.source = read_module("plugin.py")
++
++    def test_range_picker_exposes_existing_nodes_in_plan_and_actual(self):
++        class_source = self.source[
++            self.source.index("class DashboardNetworkRangeDialog"): 
++            self.source.index("class UnderbuildRangeDialog")
++        ]
++        for status in ("Rencana", "Aktual"):
++            self.assertIn('"{}"'.format(status), class_source)
++        self.assertGreaterEqual(class_source.count('"TIANG_EKSISTING"'), 3)
++
++    def test_add_underbuild_resolves_all_topology_point_layers(self):
++        source = method_source(self.source, "apply_underbuild")
++        self.assertIn("topology_point_layers_for_stage", source)
++        self.assertIn("same_topology_scope", source)
++        self.assertIn("endpoint_identity_matches", source)
++        self.assertIn("list(point_layers) + [network_layer]", source)
++
++    def test_recalculation_writes_existing_anchor_in_same_transaction(self):
++        source = method_source(self.source, "_recalculate_underbuild_edit")
++        self.assertIn("same_topology_scope", source)
++        self.assertIn("_sync_existing_anchor_pull_feature", source)
++        self.assertIn("is_existing", source)
++        self.assertIn('slot_values(\n                        "TR-3"', source)
++
++    def test_delete_underbuild_recalculates_stage_and_existing_nodes(self):
++        source = method_source(self.source, "delete_underbuild_path")
++        self.assertIn("topology_point_layers_for_stage", source)
++        self.assertIn("endpoint_pairs=endpoint_pairs", source)
++        self.assertIn("list(point_layers) + [layer]", source)
++
++    def test_helper_only_resolves_layers_and_never_copies_features(self):
++        source = method_source(self.source, "topology_point_layers_for_stage")
++        self.assertIn("topology_layer_names", source)
++        for forbidden in ("addFeature", "QgsFeature(", "clone", "copy"):
++            self.assertNotIn(forbidden, source)
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff -ruN SIGAMON_v6.17.16/tests/test_stage_model.py SIGAMON_v6.17.17/tests/test_stage_model.py
+--- SIGAMON_v6.17.16/tests/test_stage_model.py	2026-09-10 04:34:56.000000000 -0400
++++ SIGAMON_v6.17.17/tests/test_stage_model.py	2026-09-10 22:58:24.000000000 -0400
+@@ -58,6 +58,24 @@
+         for stage in (sm.STAGE_RENCANA_AWAL, sm.STAGE_RENCANA_AKHIR):
+             self.assertEqual(sm.status_for_stage(stage), "Rencana")
+ 
++    def test_plan_topology_includes_the_single_existing_pole_layer(self):
++        for stage in (sm.STAGE_RENCANA_AWAL, sm.STAGE_RENCANA_AKHIR):
++            self.assertEqual(
++                sm.topology_layer_names("TIANG", stage),
++                ("TIANG_RENCANA", "TIANG_EKSISTING"),
++            )
++
++    def test_realisasi_topology_includes_the_single_existing_pole_layer(self):
++        self.assertEqual(
++            sm.topology_layer_names("TIANG", sm.STAGE_REALISASI),
++            ("TIANG_AKTUAL", "TIANG_EKSISTING"),
++        )
++
++    def test_topology_never_creates_a_stage_copy_of_existing(self):
++        names = sm.topology_layer_names("TIANG", sm.STAGE_RENCANA_AKHIR)
++        self.assertEqual(len(names), len(set(names)))
++        self.assertNotIn("TIANG_EKSISTING_RENCANA_AKHIR", names)
++
+ 
+ class EffectiveStageTests(unittest.TestCase):
+     """TEST 2 -- Existing tetap satu, apa pun tahap yang sedang dibuka."""
+diff -ruN SIGAMON_v6.17.16/tests/test_underbuild_termination.py SIGAMON_v6.17.17/tests/test_underbuild_termination.py
+--- SIGAMON_v6.17.16/tests/test_underbuild_termination.py	2026-09-10 22:01:54.000000000 -0400
++++ SIGAMON_v6.17.17/tests/test_underbuild_termination.py	2026-09-10 22:58:26.000000000 -0400
+@@ -77,6 +77,53 @@
+         )
+ 
+ 
++class ExistingTopologyScopeTests(unittest.TestCase):
++    def _network(self, stage_name):
++        return {
++            "project_key": "P26", "id_lokasi": "LOC-A",
++            "lokasi_proyek": "Lokasi A", "tahap_data": stage_name,
++        }
++
++    def test_existing_is_a_valid_node_for_every_drawing_stage(self):
++        existing = dict(
++            self._network(stage.STAGE_EKSISTING), status_data="Eksisting"
++        )
++        for stage_name in stage.BOQ_STAGES:
++            self.assertTrue(underbuild.same_topology_scope(
++                self._network(stage_name), existing
++            ))
++
++    def test_existing_of_another_location_or_project_is_rejected(self):
++        network = self._network(stage.STAGE_RENCANA_AWAL)
++        wrong_location = dict(
++            self._network(stage.STAGE_EKSISTING), id_lokasi="LOC-B"
++        )
++        wrong_project = dict(
++            self._network(stage.STAGE_EKSISTING), project_key="P27"
++        )
++        self.assertFalse(underbuild.same_topology_scope(network, wrong_location))
++        self.assertFalse(underbuild.same_topology_scope(network, wrong_project))
++
++    def test_nonexisting_pole_must_match_the_exact_stage(self):
++        network = self._network(stage.STAGE_RENCANA_AWAL)
++        final_pole = self._network(stage.STAGE_RENCANA_AKHIR)
++        self.assertFalse(underbuild.same_topology_scope(network, final_pole))
++
++    def test_endpoint_matching_is_uuid_first(self):
++        endpoints = {("UUID-A", "TM-001")}
++        self.assertTrue(underbuild.endpoint_identity_matches(
++            "UUID-A", "TM-999", endpoints
++        ))
++        self.assertFalse(underbuild.endpoint_identity_matches(
++            "UUID-B", "TM-001", endpoints
++        ))
++
++    def test_legacy_endpoint_can_fall_back_to_pole_id(self):
++        self.assertTrue(underbuild.endpoint_identity_matches(
++            "", "TM-001", {("", "TM-001")}
++        ))
++
++
+ class Test2TwoTerminationsTests(unittest.TestCase):
+     """TEST 2/8 — dua jalur berbeda berakhir di tiang X yang sama."""
+ 
+diff -ruN SIGAMON_v6.17.16/underbuild_termination.py SIGAMON_v6.17.17/underbuild_termination.py
+--- SIGAMON_v6.17.16/underbuild_termination.py	2026-09-10 21:58:48.000000000 -0400
++++ SIGAMON_v6.17.17/underbuild_termination.py	2026-09-10 22:52:54.000000000 -0400
+@@ -249,6 +249,17 @@
+     return (values + [""] * limit)[:limit]
+ 
+ 
++def same_location_scope(left, right):
++    """Match project/location while ignoring the drawing stage."""
++    left, right = dict(left or {}), dict(right or {})
++    if _key(left.get("project_key")) != _key(right.get("project_key")):
++        return False
++    a, b = _key(left.get("id_lokasi")), _key(right.get("id_lokasi"))
++    if a and b:
++        return a == b
++    return _key(left.get("lokasi_proyek")) == _key(right.get("lokasi_proyek"))
++
++
+ def same_scope(left, right):
+     """Match project/location/stage without accepting conflicting identities.
+ 
+@@ -256,10 +267,42 @@
+     Empty identities only match empty identities, never a named dataset.
+     """
+     left, right = dict(left or {}), dict(right or {})
+-    for field in ("project_key", "tahap_data"):
+-        if _key(left.get(field)) != _key(right.get(field)):
+-            return False
+-    a, b = _key(left.get("id_lokasi")), _key(right.get("id_lokasi"))
+-    if a and b:
+-        return a == b
+-    return _key(left.get("lokasi_proyek")) == _key(right.get("lokasi_proyek"))
++    return bool(
++        same_location_scope(left, right)
++        and _key(left.get("tahap_data")) == _key(right.get("tahap_data"))
++    )
++
++
++def same_topology_scope(network, point):
++    """Match node to network; Existing is a shared physical reference.
++
++    A stage pole must match the exact stage. A physical Existing pole is valid
++    for every drawing stage in the same project/location, without copying it.
++    """
++    network, point = dict(network or {}), dict(point or {})
++    if not same_location_scope(network, point):
++        return False
++    point_stage = _key(point.get("tahap_data"))
++    return bool(
++        point_stage in ("eksisting", "existing")
++        or point_stage == _key(network.get("tahap_data"))
++    )
++
++
++def endpoint_identity_matches(point_uuid, point_id, endpoint_pairs):
++    """UUID-first endpoint match with a safe legacy-ID fallback.
++
++    When both sides have UUID, a conflicting UUID may never fall back to a
++    duplicated display ID. ID is used only when either endpoint side is legacy
++    and has no UUID.
++    """
++    puid, pid = _key(point_uuid), _key(point_id)
++    for endpoint_uuid, endpoint_id in endpoint_pairs or ():
++        euid, eid = _key(endpoint_uuid), _key(endpoint_id)
++        if puid and euid:
++            if puid == euid:
++                return True
++            continue
++        if pid and eid and pid == eid:
++            return True
++    return False
