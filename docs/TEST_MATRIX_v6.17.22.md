@@ -33,7 +33,17 @@
 | 29 | Overlay dan host memiliki parent UUID sama | Satu physical host edge | Lulus |
 | 30 | Manual Jarak (m) | Satu nilai edge dipakai SUTM/SUTR | Lulus regresi |
 | 31 | DXF Underbuild | Offset hanya output DXF, tidak menulis QGIS | Lulus regresi |
-| 32 | Seluruh regression suite | Tidak ada regresi plugin | 3.507 lulus, 6 skipped |
+| 32 | Lokasi terpilih tanpa ID kanonik | Semua kandidat ditolak sebelum graph/write | Lulus |
+| 33 | Dua feature kerja berbagi `parent_uid` | Tetap dua host edge berdasarkan `feature_uuid` | Lulus |
+| 34 | Node anonim satu bucket tetapi di luar tolerance | Tidak digabung | Lulus |
+| 35 | Node anonim ketiga dekat satu kandidat dalam bucket ambigu | Digabung hanya ke kandidat berjarak valid | Lulus |
+| 36 | Underbuild legacy tanpa `underbuild_path_id` | Tetap pending untuk pemulihan identitas | Lulus |
+| 37 | Existing legacy tanpa UUID tetapi punya `id_segmen` | Referensi carrier stabil; reapply dapat dideduplikasi | Lulus |
+| 38 | Existing tanpa UUID/`uid_objek`/`id_segmen` | Write ditolak sebelum transaksi | Lulus kontrak |
+| 39 | Dialog dipakai ulang setelah lokasi F11 berubah | Membaca dashboard sebenarnya, bukan adapter lama | Lulus kontrak |
+| 40 | Partial extension dari satu rute | Memakai kembali `underbuild_path_id`; node sambung bukan TR-3 ganda | Lulus |
+| 41 | Extension menjembatani dua ID rute | Ditolak sebelum write sebagai ambigu | Lulus |
+| 42 | Seluruh regression suite | Tidak ada regresi plugin | 3.519 lulus, 6 skipped |
 
 Catatan: “Lulus kontrak” memverifikasi jalur integrasi source tanpa runtime
 QGIS GUI. Smoke test klik/render pada QGIS desktop tetap menjadi langkah
