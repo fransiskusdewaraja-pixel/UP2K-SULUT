@@ -1,0 +1,2604 @@
+diff --git a/AUDIT_v6.17.22.md b/AUDIT_v6.17.22.md
+new file mode 100644
+index 0000000..0b2c065
+--- /dev/null
++++ b/AUDIT_v6.17.22.md
+@@ -0,0 +1,99 @@
++# Audit SIGAMON v6.17.22 — Rebuild Tambah Underbuild
++
++## Root cause
++
++`UnderbuildRangeDialog` masih memakai engine pengukuran generik yang hanya
++mengenal satu `DATA_LAYER_MAP`. Untuk memasukkan jaringan tahap aktif dan
++Existing, implementasi lama mengganti mapping global sementara, membangun dua
++graph terpisah, lalu menggabungkannya berdasarkan kedekatan koordinat.
++
++Akibatnya:
++
++- Rencana Awal dan Rencana Akhir sama-sama diarahkan lewat status `Rencana`,
++  bukan identitas tahap feature yang dipilih;
++- kandidat bergantung pada filter/record dashboard F11 yang sedang terlihat;
++- Existing baru ditempel setelah graph tahap selesai, sehingga konektivitas
++  dan identitas host edge tidak memiliki satu sumber kebenaran;
++- `project_key` legacy tidak selalu dinilai oleh predicate scope generik;
++- setiap kegagalan parsing feature ditelan oleh `except Exception: continue`,
++  kemudian seluruh penyebab dilaporkan sebagai “layer belum memiliki segmen”.
++
++Pesan tersebut karena itu bukan hanya salah teks: collection edge yang dibaca
++memang dapat kosong atau tidak terhubung walau jaringan Rencana Awal terlihat.
++
++## Arsitektur baru
++
++`underbuild_topology.py` adalah engine bebas QGIS untuk seluruh tiga tahap.
++Engine tersebut menyediakan:
++
++- `UnderbuildContext`: identitas proyek, ID/nama Lokasi Proyek, dan tahap;
++- resolver kandidat work + Existing dalam satu operasi;
++- aturan scope yang mengutamakan ID/UUID dan tidak menebak record legacy yang
++  tidak memiliki identitas proyek;
++- graph node/edge dengan UUID host stabil dan fallback spasial toleran hanya
++  saat identitas endpoint tidak tersedia;
++- pencarian path deterministik, deteksi rute terpendek ambigu, validasi path,
++  deduplikasi host/overlay, pemulihan identitas rute legacy, serta partisi
++  “sudah” vs “akan ditambahkan”.
++
++`UnderbuildRangeDialog` kini hanya menjadi adapter QGIS: membaca feature dari
++layer tahap yang dipilih dan `JARINGAN_EKSISTING`, menyerahkannya kepada satu
++resolver, menampilkan preview, lalu menulis hasil yang tervalidasi melalui
++`ClickTransaction` yang sudah ada.
++
++## Perbaikan perilaku
++
++- Rencana Awal, Rencana Akhir, dan Realisasi memakai engine yang sama dengan
++  parameter tahap; tidak ada fallback silang tahap.
++- JTM tahap, JTM Existing, dan kombinasi keduanya berada dalam satu graph.
++- Existing-only dapat menjadi rute; carrier Existing tidak dimutasi. Overlay
++  JTR tahap tetap memakai `parent_uid` host Existing.
++- Node ber-UUID berbeda tidak digabung hanya karena koordinatnya dekat. Node
++  tanpa identitas dapat memakai fallback spasial dalam tolerance.
++- Jalur JTR-only tidak dapat menjadi shortcut pencarian host JTM.
++- Reapply pada edge yang sama tidak menulis ulang; partial Underbuild hanya
++  menulis edge yang belum tercakup. Perpanjangan memakai kembali satu
++  `underbuild_path_id` yang bersebelahan agar node tembus tidak berubah menjadi
++  dua terminasi TR-3; pilihan yang menjembatani dua ID rute ditolak sebelum
++  transaksi.
++- `parent_uid` tetap diperlakukan sebagai provenance pada feature kerja.
++  Hanya overlay Existing eksplisit yang memakainya sebagai identitas carrier;
++  Existing legacy memakai `id_segmen` stabil bila UUID tidak tersedia.
++- Bucket koordinat hanya mempercepat pencarian. Keputusan gabung node anonim
++  selalu memeriksa jarak Euclidean aktual terhadap tolerance.
++- Lokasi yang tidak dapat diresolusikan ke ID kanonik ditolak sebelum graph
++  atau transaksi dibuat; dialog yang dipakai ulang selalu membaca lokasi F11
++  terbaru dari dashboard sebenarnya.
++- Ringkasan menampilkan panjang “Sudah Underbuild” dan “Akan Ditambahkan”.
++- Kandidat klik yang bertumpuk diurutkan deterministik dan meminta pemilihan.
++- ESC, Tutup, dan Hapus Hasil membersihkan rubber band, marker, map tool, serta
++  cache graph sementara.
++- Validasi project/location/stage/node/path/scope dijalankan lagi sebelum
++  transaksi. Begin, commit, rollback, exception, provider, run UUID,
++  perubahan konstruksi, dan dampak BOQ dicatat sebagai structured log.
++- Pesan kosong menyebut tahap dan Lokasi Proyek, bukan nama layer internal.
++- Feature rusak dicatat beserta layer/FID/error; tidak lagi dibuang diam-diam.
++
++## Kompatibilitas dan data safety
++
++Tidak ada field, tabel, GeoPackage, UUID, geometri, koordinat, atau setting
++user yang dihapus atau di-reset. Tidak diperlukan migrasi schema. Field dan
++relasi Underbuild lama tetap dibaca; data legacy ambigu dipertahankan dan
++ditolak dari operasi write dengan diagnostic reason, bukan dimodifikasi.
++
++JTM tetap menjadi host. Operasi Existing hanya membuat overlay JTR tahap yang
++sudah digunakan versi sebelumnya. Hapus Underbuild, Hitung Ulang Konstruksi,
++BOQ, aturan dua terminasi TR-3, deduplikasi TM-4X, satu nilai Jarak (m), DXF,
++dan renderer Existing solid tetap memakai engine produksi yang sama dan telah
++masuk regression suite.
++
++## Verifikasi
++
++- Test Underbuild baru: 49 lulus, 0 gagal.
++- Regression terarah Underbuild/Existing/terminasi/tahap/DXF: 395 lulus.
++- Regression penuh: 3.519 lulus, 6 dilewati, 0 gagal.
++- `py_compile` dan `git diff --check`: lulus.
++
++Tes otomatis menggunakan engine bebas QGIS dan pemeriksaan kontrak source.
++Validasi interaksi klik/render di QGIS desktop tetap direkomendasikan sebagai
++smoke test instalasi pada salinan project pengguna sebelum deployment luas.
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 9530c9a..facf5b5 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -1,4 +1,4 @@
+-# SIGAMON v6.17.21
++# SIGAMON v6.17.22
+ 
+ Workspace pengembangan plugin QGIS SIGAMON. Judul Proyek adalah batas data
+ tertinggi: dua Judul Proyek tetap dua dataset walaupun desa, nama Lokasi
+diff --git a/README.txt b/README.txt
+index d84eb9c..63771fb 100644
+--- a/README.txt
++++ b/README.txt
+@@ -1,4 +1,7 @@
+-SIGAMON v6.17.21
++SIGAMON v6.17.22
++Lihat AUDIT_v6.17.22.md untuk rebuild Tambah Underbuild berbasis identitas
++Project + Lokasi Proyek + Tahap + UUID + topologi, dukungan Existing pada
++ketiga tahap, idempotensi per bentang, preview aman, dan transaksi terlog.
+ Lihat AUDIT_v6.17.21.md untuk topologi konstruksi underbuild pada jaringan
+ Eksisting, aturan TM-4X hanya untuk tarikan awal JTM nyata, BOQ lengkap, dan
+ renderer carrier Eksisting yang tetap solid.
+diff --git a/TEST_MATRIX_v6.17.22.md b/TEST_MATRIX_v6.17.22.md
+new file mode 100644
+index 0000000..f8a150a
+--- /dev/null
++++ b/TEST_MATRIX_v6.17.22.md
+@@ -0,0 +1,50 @@
++# Test Matrix SIGAMON v6.17.22
++
++| # | Skenario | Expected | Hasil otomatis |
++|---:|---|---|---|
++| 01 | Rencana Awal A-B-C-D | Path A-D ditemukan pada tahap Awal | Lulus |
++| 02 | Rencana Awal planned → Existing | Satu path tersambung | Lulus |
++| 03 | Rencana Awal Existing-only | Host Existing dapat dilalui | Lulus |
++| 04 | Rencana Akhir + Existing | Resolver hanya menerima tahap Akhir + Existing | Lulus |
++| 05 | Realisasi + Existing | Resolver hanya menerima Realisasi + Existing | Lulus |
++| 06 | Start Existing, end planned | Endpoint eksplisit tersambung | Lulus |
++| 07 | Start planned, end Existing | Endpoint eksplisit tersambung | Lulus |
++| 08 | Existing → Existing | Path JTM Existing valid | Lulus |
++| 09 | Dua lokasi/proyek berdekatan | Edge proyek tetangga ditolak | Lulus |
++| 10 | Tiang Existing dipakai dua proyek | Scope project/location tetap terpisah | Lulus |
++| 11 | Reapply edge yang sama | Pending edge kosong; tidak duplicate | Lulus |
++| 12 | Partial A-B-C lalu C-D-E | Hanya C-D dan D-E ditulis | Lulus |
++| 13 | Hapus Underbuild | JTM/node tetap; konstruksi dihitung ulang | Lulus regresi |
++| 14 | Dua route berakhir di node sama | Dua terminasi TR-3 dipertahankan | Lulus regresi |
++| 15 | Style JTM/JTR Existing | Merah/biru tetap solid | Lulus regresi |
++| 16 | Hitung Ulang pada existing pole | TR berada pada node Existing yang benar | Lulus regresi |
++| 17 | BOQ Underbuild/Existing | TR tidak hilang/double; TM-4X tidak palsu | Lulus regresi |
++| 18 | Switch Awal → Akhir → Realisasi | Satu resolver membaca tahap pilihan | Lulus |
++| 19 | ESC/Tutup saat preview | Rubber band, marker, map tool, cache dibersihkan | Lulus kontrak |
++| 20 | Write gagal | `ClickTransaction.abort()` + rollback log | Lulus kontrak/regresi |
++| 21 | Bug screenshot Rencana Awal terlihat | `stage_layer` + atribut tahap, bukan mapping status generik | Lulus kontrak |
++| 22 | Nama lokasi sama, ID berbeda | ID lokasi menang; kandidat salah ditolak | Lulus |
++| 23 | `project_key` tanpa `id_proyek` | Project identity tetap dikenali | Lulus |
++| 24 | Legacy tanpa project dan ID lokasi | Tidak ditebak; dicatat `project_missing` | Lulus |
++| 25 | Endpoint tanpa UUID/ID | Fallback spasial toleran menghubungkan node | Lulus |
++| 26 | UUID endpoint konflik, koordinat sama | Node tidak digabung | Lulus |
++| 27 | Dua shortest path sama | Dilaporkan ambigu | Lulus |
++| 28 | JTR-only lebih pendek | Tidak menjadi shortcut host JTM | Lulus |
++| 29 | Overlay dan host memiliki parent UUID sama | Satu physical host edge | Lulus |
++| 30 | Manual Jarak (m) | Satu nilai edge dipakai SUTM/SUTR | Lulus regresi |
++| 31 | DXF Underbuild | Offset hanya output DXF, tidak menulis QGIS | Lulus regresi |
++| 32 | Lokasi terpilih tanpa ID kanonik | Semua kandidat ditolak sebelum graph/write | Lulus |
++| 33 | Dua feature kerja berbagi `parent_uid` | Tetap dua host edge berdasarkan `feature_uuid` | Lulus |
++| 34 | Node anonim satu bucket tetapi di luar tolerance | Tidak digabung | Lulus |
++| 35 | Node anonim ketiga dekat satu kandidat dalam bucket ambigu | Digabung hanya ke kandidat berjarak valid | Lulus |
++| 36 | Underbuild legacy tanpa `underbuild_path_id` | Tetap pending untuk pemulihan identitas | Lulus |
++| 37 | Existing legacy tanpa UUID tetapi punya `id_segmen` | Referensi carrier stabil; reapply dapat dideduplikasi | Lulus |
++| 38 | Existing tanpa UUID/`uid_objek`/`id_segmen` | Write ditolak sebelum transaksi | Lulus kontrak |
++| 39 | Dialog dipakai ulang setelah lokasi F11 berubah | Membaca dashboard sebenarnya, bukan adapter lama | Lulus kontrak |
++| 40 | Partial extension dari satu rute | Memakai kembali `underbuild_path_id`; node sambung bukan TR-3 ganda | Lulus |
++| 41 | Extension menjembatani dua ID rute | Ditolak sebelum write sebagai ambigu | Lulus |
++| 42 | Seluruh regression suite | Tidak ada regresi plugin | 3.519 lulus, 6 skipped |
++
++Catatan: “Lulus kontrak” memverifikasi jalur integrasi source tanpa runtime
++QGIS GUI. Smoke test klik/render pada QGIS desktop tetap menjadi langkah
++deployment yang disarankan.
+diff --git a/build_release.py b/build_release.py
+index c5432ad..6885b2a 100644
+--- a/build_release.py
++++ b/build_release.py
+@@ -78,7 +78,9 @@ def release_line(version):
+ 
+ def should_skip(relative_path, lean, version):
+     name = os.path.basename(relative_path)
+-    if name.endswith(ALWAYS_SKIP_SUFFIXES):
++    # ``*.rej``/``*.orig`` dapat tertinggal dari audit patch lokal dan tidak
++    # pernah merupakan bagian plugin yang dapat dipasang.
++    if name.endswith(ALWAYS_SKIP_SUFFIXES + (".rej", ".orig")):
+         return True
+     if not lean:
+         return False
+diff --git a/docs/superpowers/plans/2026-09-13-underbuild-topology.md b/docs/superpowers/plans/2026-09-13-underbuild-topology.md
+new file mode 100644
+index 0000000..26174ad
+--- /dev/null
++++ b/docs/superpowers/plans/2026-09-13-underbuild-topology.md
+@@ -0,0 +1,131 @@
++# Underbuild Topology Implementation Plan
++
++> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
++
++**Goal:** Replace the stage/layer-name-dependent Underbuild resolver with one project/location/stage topology engine while preserving the existing transactional mutation, construction, BOQ, distance, and styling invariants.
++
++**Architecture:** A new QGIS-free `underbuild_topology.py` resolves candidate records and builds the graph. `UnderbuildRangeDialog` becomes a QGIS adapter that supplies normalized records and consumes the graph; persistence continues through the existing transaction and recalculation methods.
++
++**Tech Stack:** Python 3, QGIS Python API adapter code, `unittest`, existing SIGAMON `stage_model`, `project_scope`, `underbuild_termination`, and `ClickTransaction`.
++
++**Spec:** `docs/superpowers/specs/2026-09-13-underbuild-topology-design.md`
++
++## Global Constraints
++
++- Preserve all user data, IDs, UUIDs, geometry, project settings, and existing migration compatibility.
++- Stage values remain exactly Rencana Awal, Rencana Akhir, and Realisasi; Existing remains a status/reference.
++- Project and Lokasi Proyek are identity boundaries; village and visual proximity are not.
++- One host edge supplies one effective `Jarak (m)` to both JTM and Underbuild.
++- Existing SUTM stays red solid and Existing SUTR stays blue solid.
++- Apply and delete mutations are transactional and idempotent.
++- TM-4X is emitted only for a real JTM initial pull and never from an Existing carrier alone.
++
++---
++
++### Task 1: Pure context and candidate resolver
++
++**Files:**
++- Create: `underbuild_topology.py`
++- Create: `tests/test_underbuild_topology.py`
++
++**Interfaces:**
++- Consumes: normalized dictionaries from `plugin._engineering_feature_values()` and `stage_model.feature_stage()`.
++- Produces: `UnderbuildContext`, `CandidateDecision`, `resolve_candidates(context, work_rows, existing_rows)`, and diagnostic counts/reasons.
++
++- [ ] **Step 1: Write failing tests** for Rencana Awal/Akhir/Realisasi selection, legacy empty Rencana stage, exact project/location isolation, Existing inclusion, conflicting location IDs, and location-name fallback only when ID is absent.
++- [ ] **Step 2: Run** `python3 -m unittest tests.test_underbuild_topology.CandidateResolverTests -v` and confirm failures are caused by the missing module/API.
++- [ ] **Step 3: Implement** immutable context normalization and a single candidate decision function that returns explicit rejection reasons.
++- [ ] **Step 4: Run** the focused resolver tests and confirm they pass.
++- [ ] **Step 5: Commit** `underbuild_topology.py` and `tests/test_underbuild_topology.py` with message `feat: add scoped underbuild network resolver`.
++
++### Task 2: Stable topology graph and path semantics
++
++**Files:**
++- Modify: `underbuild_topology.py`
++- Modify: `tests/test_underbuild_topology.py`
++
++**Interfaces:**
++- Consumes: accepted records with stable host identity, endpoint coordinates/UUIDs, length, flags, and opaque feature payload.
++- Produces: `build_topology(records, tolerance)`, `shortest_path(graph, start, end)`, `shortest_path_count(graph, start, end)`, and `partition_underbuild_edges(graph, path)`.
++
++- [ ] **Step 1: Write failing tests** for planned-only, planned-to-Existing, Existing-only, mixed networks, two nearby project locations, branch ambiguity, JTR shortcut rejection, duplicate feature reads, full idempotency, and partial extension.
++- [ ] **Step 2: Run** `python3 -m unittest tests.test_underbuild_topology.TopologyGraphTests -v` and confirm the expected missing behavior failures.
++- [ ] **Step 3: Implement** tolerance-based nodes, stable host-edge deduplication, JTM-only adjacency, deterministic Dijkstra ordering, ambiguity counting, and covered/new edge partitioning.
++- [ ] **Step 4: Run** the graph tests and confirm they pass.
++- [ ] **Step 5: Commit** with message `feat: add deterministic underbuild topology graph`.
++
++### Task 3: QGIS resolver integration and truthful diagnostics
++
++**Files:**
++- Modify: `plugin.py`
++- Modify: `tests/test_underbuild_topology.py`
++- Modify: `tests/test_existing_underbuild_nodes.py`
++
++**Interfaces:**
++- Consumes: `resolve_candidates()` and `build_topology()`.
++- Produces: `UnderbuildRangeDialog._underbuild_context_values()`, `_underbuild_network_records()`, and a direct `_build_graph()` that no longer mutates `DATA_LAYER_MAP`.
++
++- [ ] **Step 1: Write failing source-contract tests** proving the Underbuild graph does not rewrite `DATA_LAYER_MAP`, explicitly requests the selected stage work layer plus Existing, logs rejected/malformed features, and emits stage/location user errors.
++- [ ] **Step 2: Run** those focused tests and confirm they fail against v6.17.21.
++- [ ] **Step 3: Implement** QGIS record adaptation, single-pass resolver invocation, node label attachment by endpoint identity, graph signal tracking for all source layers, and structured `SIGAMON Underbuild` logs.
++- [ ] **Step 4: Run** focused resolver/integration tests and confirm they pass.
++- [ ] **Step 5: Commit** with message `fix: resolve underbuild from scoped topology sources`.
++
++### Task 4: Apply, preview, cleanup, and transactional validation
++
++**Files:**
++- Modify: `plugin.py`
++- Modify: `underbuild_topology.py`
++- Modify: `tests/test_underbuild_topology.py`
++- Modify: `tests/test_existing_underbuild_nodes.py`
++
++**Interfaces:**
++- Consumes: selected path and `partition_underbuild_edges()`.
++- Produces: validated new-edge mutation plan, accurate summary values, deterministic co-located point selection, and structured apply/rollback results.
++
++- [ ] **Step 1: Write failing tests** for already-underbuilt path, partial extension, cross-scope path rejection, preview cleanup on reset/close/context change, apply validation before `ClickTransaction.begin()`, and rollback logging.
++- [ ] **Step 2: Run** focused tests and confirm the expected failures.
++- [ ] **Step 3: Implement** mutation-plan validation, updated summary (`Sudah Underbuild` and `Akan Ditambahkan`), deterministic identity-first point selection, Escape cleanup, and transaction result logging.
++- [ ] **Step 4: Run** focused tests and confirm they pass.
++- [ ] **Step 5: Commit** with message `fix: make underbuild apply idempotent and atomic`.
++
++### Task 5: Construction, BOQ, deletion, and style regressions
++
++**Files:**
++- Modify: `tests/test_underbuild_topology.py`
++- Modify: `tests/test_existing_underbuild_nodes.py`
++- Modify: `tests/test_existing_pole_stage_connectivity.py`
++- Modify: `tests/test_underbuild_termination.py`
++- Modify: `tests/test_existing_network_style.py`
++- Modify: `plugin.py` only if a new failing behavior test identifies a production defect.
++
++**Interfaces:**
++- Consumes: existing `_recalculate_underbuild_edit`, `delete_underbuild_path`, `termination_count`, BOQ existing-pole records, and renderer rules.
++- Produces: verified invariants for Existing-node placement, double TR-3 terminators, no false/double TM-4X, host-safe deletion, and solid Existing carriers.
++
++- [ ] **Step 1: Add behavior/contract tests** matching scenarios 13–17 and 20 from the supplied specification.
++- [ ] **Step 2: Run** the focused construction/BOQ/delete/style tests and confirm any defect is reproduced before production edits.
++- [ ] **Step 3: If a defect is reproduced, make the minimum production correction** in the existing single persistence/recalculation path.
++- [ ] **Step 4: Re-run** all focused Underbuild, construction, BOQ, deletion, DXF, and style tests.
++- [ ] **Step 5: Commit** with message `test: lock underbuild construction and boq invariants` or a precise `fix:` message when production changes are required.
++
++### Task 6: Release, full verification, and GitHub delivery
++
++**Files:**
++- Modify: `plugin.py`
++- Modify: `metadata.txt`
++- Modify: `README.txt`
++- Modify: `CLAUDE.md`
++- Create: `AUDIT_v6.17.22.md`
++- Create: `TEST_MATRIX_v6.17.22.md`
++
++**Interfaces:**
++- Consumes: completed implementation and observed test results.
++- Produces: v6.17.22 source ZIP, normalized patch, GitHub audit/test documents, and updated repository README.
++
++- [ ] **Step 1: Update version metadata** to v6.17.22 and document the actual root cause, architecture, compatibility, and data-safety boundaries.
++- [ ] **Step 2: Run syntax verification** with `python3 -m compileall` over changed Python modules.
++- [ ] **Step 3: Run focused tests** for resolver, Underbuild, Existing nodes, construction, BOQ, stage, distance, DXF, and style.
++- [ ] **Step 4: Run full regression** with `python3 -m unittest discover -s tests -p 'test*.py'` and record the exact result.
++- [ ] **Step 5: Build** the installable ZIP and a `diff -ruN` patch against the frozen v6.17.21 baseline; inspect archive paths and patch applicability.
++- [ ] **Step 6: Commit and push** the release patch plus audit/test documents to `fransiskusdewaraja-pixel/UP2K-SULUT` on a feature branch, then open a pull request to `main`.
+diff --git a/docs/superpowers/specs/2026-09-13-underbuild-topology-design.md b/docs/superpowers/specs/2026-09-13-underbuild-topology-design.md
+new file mode 100644
+index 0000000..79ccfff
+--- /dev/null
++++ b/docs/superpowers/specs/2026-09-13-underbuild-topology-design.md
+@@ -0,0 +1,68 @@
++# SIGAMON Underbuild Topology Design
++
++## Goal
++
++Make **Tools → Tambah Underbuild** resolve and follow the real JTM topology for Rencana Awal, Rencana Akhir, and Realisasi, including physical Existing poles and networks, without mutating the host JTM or mixing project locations.
++
++## Confirmed root cause
++
++`UnderbuildRangeDialog` still delegates graph construction to `DashboardNetworkRangeDialog`, whose source is selected through the single-value `DATA_LAYER_MAP`. The underbuild override temporarily rewrites that map once for the work layer and once for `JARINGAN_EKSISTING`, while filtering candidates through applied F11 state. The generic builder silently catches every per-feature exception and converts an empty result into the misleading implementation-level message `Layer JARINGAN_RENCANA belum memiliki segmen jaringan yang dapat diukur.`
++
++This creates four coupled failure modes:
++
++1. Rencana Awal and Rencana Akhir share one physical layer, but stage is resolved separately from the layer mapping.
++2. project and location filtering is implicit and has no per-candidate diagnostics;
++3. Existing is bolted on as a second graph instead of being a first-class source in one resolver;
++4. malformed or incompatible feature data disappears silently, making a visible network look absent.
++
++## Architecture
++
++Create `underbuild_topology.py` as a QGIS-free source of truth. It owns normalized `UnderbuildContext`, candidate scope decisions, stable node/edge identities, graph adjacency, shortest-path ambiguity counting, and idempotent partitioning of already-underbuilt versus new host edges. It never writes data.
++
++`plugin.py` adapts QGIS layers and features into resolver records. `UnderbuildRangeDialog` asks the resolver for the work layer plus Existing in a single operation, converts valid line geometry into topology records, builds one graph, and annotates nodes with matching stage/Existing poles and substations. It does not mutate `DATA_LAYER_MAP` and does not depend on which layer is selected or visible.
++
++The existing `ClickTransaction`, `_recalculate_underbuild_edit`, `delete_underbuild_path`, construction evaluator, BOQ adapter, and renderer remain the persistence path. Apply/delete validation is strengthened before the transaction, and structured Underbuild logging records context, candidate counts, selected path, transaction result, construction impact, and the root exception.
++
++## Scope and identity rules
++
++- Context is `project + location + stage`; village is never an identity boundary.
++- Rencana work features must match the selected Rencana Awal or Rencana Akhir. Legacy empty Rencana stage belongs only to Rencana Awal according to `stage_model.feature_stage`.
++- Realisasi work features must match Realisasi.
++- Existing is a physical reference, not a fourth stage. It must still match the selected project/location identity; stage is ignored only for Existing rows.
++- `id_proyek`/canonical project key and `id_lokasi` are authoritative. Location name is a legacy fallback only when the row has no location ID. A conflicting populated ID is rejected.
++- Endpoint UUID is authoritative. Display ID is fallback only when one side lacks UUID.
++- Host edge identity prefers feature UUID, then object UID/segment ID, then `(layer id, fid)`.
++
++## Graph and selection
++
++- Node coordinates are merged within the canvas-CRS tolerance, but edges from another scope never enter the candidate set.
++- Only JTM-capable edges are traversable. JTR-only edges cannot shortcut a route.
++- A unique shortest path is selected automatically. Multiple equal shortest paths remain an explicit user confirmation.
++- Point picking is deterministic: exact endpoint identity in context precedes distance; ambiguous co-located identities are shown to the user instead of selected randomly.
++- Preview is read-only and is cleared on Reset, Escape, Close, data-context change, or transaction completion.
++
++## Mutation and compatibility
++
++- Work-layer host JTM keeps its feature, geometry, UUID, endpoints, and distance; only Underbuild attributes are updated.
++- Existing JTM remains read-only and red solid. A stage-owned JTR overlay references the Existing host through `parent_uid`.
++- Reapplying the same host edge in the same stage/location is idempotent. Partial extension adds only uncovered edges.
++- One edge has one effective `Jarak (m)` source; overlays copy the host distance fields.
++- Existing underbuild data remains readable. No fields, tables, user settings, IDs, UUIDs, or project data are dropped or reset.
++- Apply and delete remain atomic through `ClickTransaction`; failure aborts all staged changes.
++
++## Construction and BOQ invariants
++
++- TR construction is derived from the underbuild graph, not nearest poles.
++- A through node is not forced to TR-3. Endpoints, bends, branches, and crossings continue through the SK-GM evaluator.
++- Two distinct underbuild runs terminating at one node may occupy two TR-3 slots.
++- Existing-pole TR stays on that physical Existing pole and is included once in BOQ.
++- Existing carrier alone never proves a JTM initial pull and cannot create TM-4X.
++- One physical TM-4X produces one BOQ occurrence.
++
++## Error and logging contract
++
++User messages identify stage and location and distinguish: no scoped JTM, invalid/malformed segments, disconnected endpoints, cross-scope endpoints, ambiguous routes, and already-underbuilt routes. Internal logs use the `SIGAMON Underbuild` channel and include action, project, location, stage, source layer, feature counts, rejection counts/reasons, selected edge identities, run UUID, transaction result, construction changes, BOQ impact, and root exception.
++
++## Verification
++
++Automated tests cover the 20 scenarios in the supplied specification, with QGIS-free behavior tests for resolver/graph/idempotency and source-contract tests for QGIS transaction, construction, renderer, cleanup, BOQ, and UI integration. Focused tests run first, followed by the entire unittest suite and syntax compilation. The release report records only commands actually run and their observed results.
+diff --git a/metadata.txt b/metadata.txt
+index 8a6ecd7..e24202a 100644
+--- a/metadata.txt
++++ b/metadata.txt
+@@ -1,10 +1,10 @@
+ [general]
+-name=SIGAMON v6.17.21 Gambar, Analisis, dan Monitoring Jaringan
++name=SIGAMON v6.17.22 Gambar, Analisis, dan Monitoring Jaringan
+ qgisMinimumVersion=3.0
+ author=SIGAMON — UP2K Sulawesi Utara
+ email=
+-version=6.17.21
+-changelog=v6.17.21: Underbuild pada JTM Eksisting kini memakai topologi JTR penuh: TR-3 hanya pada terminasi, sedangkan titik tembus/belokan/cabang mengikuti degree dan sudut serta seluruh tipenya masuk BOQ. Carrier Eksisting tidak lagi dianggap tarikan awal; TM-4X hanya muncul bila ada edge JTM Rencana/Realisasi yang benar-benar mulai dari tiang eksisting. Overlay hanya menggambar JTR sehingga garis merah JTM Eksisting tetap solid. Nilai stale v6.17.20 dibersihkan saat Hitung Ulang. Lihat AUDIT_v6.17.21.md.
++version=6.17.22
++changelog=v6.17.22: Tambah Underbuild dibangun ulang dengan resolver proyek/lokasi/tahap dan graph topologi tunggal untuk Rencana Awal, Rencana Akhir, Realisasi, serta Existing. Pemilihan tidak lagi memutasi mapping layer atau bergantung visibility F11; edge memakai UUID stabil, path tervalidasi dan idempotent, partial Underbuild menulis hanya bentang baru, preview dibersihkan oleh ESC/Tutup, dan transaksi memiliki structured logging. Lihat AUDIT_v6.17.22.md.
+     v6.17.20: Tambah Underbuild kini membaca graph gabungan JTM tahap terpilih dan JARINGAN_EKSISTING dalam Lokasi Proyek yang sama. JTM Eksisting tetap read-only; SIGAMON membuat satu overlay JTR pada layer Rencana/Aktual, mempertahankan Jarak (m) input, dan memberi parent_uid sumber agar idempotent. Overlay dihitung sebagai JTR saja sehingga BOQ menghasilkan satu TM-4X dari carrier eksisting dan TR-3 pada terminasi tanpa menggandakan JTM/TM-4X. Lihat AUDIT_v6.17.20.md.
+     v6.17.19: Memperbaiki BOQ tiang eksisting secara topologis. TM-4X kini dideduplikasi satu kali per tiang fisik, tahap, dan Lokasi Proyek walaupun beberapa edge menempel. TR-3 underbuild pada tiang eksisting dihitung dari terminasi route aktif: satu route berakhir = satu TR-3, route tembus = nol, dan dua route berakhir = dua. UUID endpoint tetap utama dan ID legacy tidak boleh menyeberang lokasi. Lihat AUDIT_v6.17.19.md.
+     v6.17.17: Tambah/Hapus Underbuild kini memperlakukan TIANG_EKSISTING sebagai node topologi bersama pada Rencana Awal, Rencana Akhir, dan Realisasi. Pemilihan serta penulisan konstruksi memakai scope Judul Proyek/Lokasi Proyek dan endpoint UUID-first; ID hanya fallback data lama. TM-4X utama dan TR-3 bawah dapat tersimpan bersama pada satu tiang eksisting dalam transaksi yang sama, termasuk terminasi ganda. Tiang eksisting tidak disalin ke layer tahap. Jarak (m) manual tetap satu sumber untuk gawang utama/underbuild. Lihat AUDIT_v6.17.17.md.
+diff --git a/plugin.py b/plugin.py
+index 6f27d7d..4b88fa1 100644
+--- a/plugin.py
++++ b/plugin.py
+@@ -117,10 +117,16 @@ except Exception:
+ # SATU TIANG DAPAT MENGAKHIRI LEBIH DARI SATU JALUR UNDERBUILD. Aturan
+ # terminasi (dua Gardu bertemu di satu tiang -> TR-3 dua kali) hidup di modul
+ # QGIS-free ini -- lihat underbuild_termination.py.
+-try:
+-    from . import underbuild_termination as pln_underbuild
+-except Exception:
+-    import underbuild_termination as pln_underbuild
++try:
++    from . import underbuild_termination as pln_underbuild
++except Exception:
++    import underbuild_termination as pln_underbuild
++# Pemilihan kandidat dan graph Tambah Underbuild memiliki satu engine khusus.
++# Modul ini bebas QGIS agar aturan scope/topologi dapat diuji secara menyeluruh.
++try:
++    from . import underbuild_topology as pln_underbuild_topology
++except Exception:
++    import underbuild_topology as pln_underbuild_topology
+ # Aturan visibilitas canvas (Tampilan Data + Detail ON/OFF). Modul bebas QGIS
+ # supaya keputusan "layer mana yang terlihat" bisa diuji tanpa QGIS.
+ try:
+@@ -417,7 +423,7 @@ except Exception:
+             return None
+ 
+ # Versi plugin untuk ditampilkan kecil pada header panel (informasi saja).
+-PLN_TOOLS_VERSION = "v6.17.21"
++PLN_TOOLS_VERSION = "v6.17.22"
+ DXF_LAST_EXPORT_FOLDER_KEY = "PLNTools/dxf_last_export_folder"
+ PREVIEW_LAST_EXPORT_FOLDER_KEY = "PLNTools/preview_last_export_folder"
+ 
+@@ -15471,10 +15477,10 @@ class UnderbuildRangeDialog(DashboardNetworkRangeDialog):
+     tidak berubah dan tidak ikut dihitung sebagai kebutuhan JTM baru.
+     """
+ 
+-    def __init__(self, plugin, dashboard=None):
+-        self.plugin = plugin
+-        self.dashboard = dashboard
+-        self._applied_underbuild = False
++    def __init__(self, plugin, dashboard=None):
++        self.plugin = plugin
++        self._source_dashboard = dashboard
++        self._applied_underbuild = False
+         self._underbuild_context = UnderbuildRangeContext(plugin, dashboard)
+         super().__init__(self._underbuild_context)
+         self.setWindowTitle("Tambah Underbuild pada JTM")
+@@ -15500,176 +15506,485 @@ class UnderbuildRangeDialog(DashboardNetworkRangeDialog):
+         self.btn_apply_underbuild = QPushButton("✓ Terapkan Underbuild pada Jalur")
+         self.btn_apply_underbuild.setObjectName("DarkButton")
+         self.btn_apply_underbuild.setEnabled(False)
+-        self.btn_apply_underbuild.setToolTip(
++        self.btn_apply_underbuild.setToolTip(
+             "Tidak memotong atau menggandakan geometri. Atribut jaringan dan "
+             "konstruksi diperbarui otomatis pada tahap yang dipilih."
+         )
+-        self.layout().addWidget(self.btn_apply_underbuild)
+-        self.btn_apply_underbuild.clicked.connect(self.apply_underbuild)
+-
+-    def _allowed_network_fids(self, layer):
++        self.layout().addWidget(self.btn_apply_underbuild)
++        self.btn_apply_underbuild.clicked.connect(self.apply_underbuild)
++        self._result_rows = list(self._result_rows) + [
++            "Sudah Underbuild", "Akan Ditambahkan",
++        ]
++        self.tbl_result.setRowCount(len(self._result_rows))
++        self.tbl_result.setMinimumHeight(270)
++        for row, label in enumerate(self._result_rows):
++            self.tbl_result.setItem(row, 0, QTableWidgetItem(label))
++            if self.tbl_result.item(row, 1) is None:
++                self.tbl_result.setItem(row, 1, QTableWidgetItem("-"))
++
++    def _underbuild_context_values(self):
++        """Konteks otoritatif satu sesi: proyek + lokasi + tahap."""
+         stage = pln_stage.normalize_stage(self.cbo_data.currentText())
+-        layer_is_existing = "EKSISTING" in str(layer.name() or "").upper()
+-        scope = self.plugin.active_project_scope()
+-        location = self._underbuild_context._combo_text(self._underbuild_context.cbo_desa)
+-        all_locations = location.casefold() in ("", "semua lokasi proyek", "semua desa")
+-        location_ids = set()
+-        if not all_locations:
+-            try:
+-                location_ids = {
+-                    str(value).strip().casefold()
+-                    for value in self.plugin.project_location_ids_for_name(
+-                        location
+-                    ) or ()
+-                    if str(value).strip()
+-                }
+-            except Exception:
+-                location_ids = set()
+-        allowed = set()
++        project_key = pln_stage.clean(self.plugin.active_project_id())
++        location_name = ""
++        try:
++            if self._source_dashboard is not None:
++                location_name = pln_stage.clean(
++                    self._source_dashboard._fullscreen_selected_location()
++                )
++            else:
++                location_name = pln_stage.clean(
++                    self.plugin._pln_f11_export_selected_location()
++                )
++        except Exception:
++            location_name = ""
++        if not location_name:
++            location_name = self._underbuild_context._combo_text(
++                self._underbuild_context.cbo_desa
++            )
++        location_ids = self.plugin.project_location_ids_for_name(
++            location_name, project_id=project_key
++        )
++        return pln_underbuild_topology.UnderbuildContext(
++            project_key=project_key,
++            location_ids=location_ids,
++            location_name=location_name,
++            stage=stage,
++        )
++
++    def _underbuild_log(self, action, context=None, level=None, **fields):
++        """Catat keputusan graph/transaksi sebagai satu event terstruktur."""
++        if context is None:
++            context = self._underbuild_context_values()
++        event = pln_underbuild_topology.diagnostic_event(
++            action, context, **fields
++        )
++        QgsMessageLog.logMessage(
++            json.dumps(event, ensure_ascii=False, sort_keys=True, default=str),
++            "SIGAMON Underbuild",
++            Qgis.Info if level is None else level,
++        )
++
++    def _underbuild_network_records(self, layer, source_kind, context):
++        """Ubah feature QGIS menjadi kandidat resolver; kegagalan selalu tampak."""
++        rows = []
++        malformed_features = []
++        if layer is None:
++            return rows, malformed_features
+         for feature in layer.getFeatures():
+-            values = self.plugin._engineering_feature_values(feature)
+-            if (not layer_is_existing and values["tahap_data"] != stage):
++            try:
++                values = dict(self.plugin._engineering_feature_values(feature))
++                feature_location_id = pln_stage.clean(
++                    values.get("id_lokasi")
++                )
++                values["id_lokasi"] = feature_location_id
++                geometry = self._transform_geometry(layer, feature.geometry())
++                if not geometry or geometry.isEmpty():
++                    raise ValueError("geometri kosong")
++                endpoints = self._geometry_endpoints(geometry)
++                if not endpoints:
++                    raise ValueError("endpoint geometri tidak terbaca")
++                start, end = endpoints
++                has_jtm, has_jtr, is_underbuild = self._segment_flags(
++                    layer, feature
++                )
++                feature_uuid = self._read_attr(
++                    layer, feature, [UUID_FIELD], ""
++                )
++                parent_uid = self._read_attr(
++                    layer, feature, [pln_stage.FIELD_PARENT_UID], ""
++                )
++                version_source = self._read_attr(
++                    layer, feature, [pln_stage.FIELD_VERSION_SOURCE], ""
++                )
++                effective_source_kind = source_kind
++                if (
++                    source_kind == "work" and parent_uid
++                    and (
++                        pln_stage.normalize_stage(version_source)
++                        == pln_stage.STAGE_EKSISTING
++                        or "REFERENSI EKSISTING" in str(
++                            values.get("jaringan_utama") or ""
++                        ).upper()
++                    )
++                ):
++                    effective_source_kind = "existing_overlay"
++                values.update({
++                    "source_kind": effective_source_kind,
++                    "source_layer_id": str(layer.id()),
++                    "source_layer_name": str(layer.name() or ""),
++                    "feature_layer": layer,
++                    "fid": int(feature.id()),
++                    "feature_uuid": feature_uuid,
++                    "uid_objek": self._read_attr(
++                        layer, feature, [pln_stage.FIELD_OBJECT_UID], ""
++                    ),
++                    "parent_uid": parent_uid,
++                    "version_source": version_source,
++                    "id_segmen": self._read_attr(
++                        layer, feature, ["id_segmen", "id_jaringan"], ""
++                    ),
++                    "from_feature_uuid": self._read_attr(
++                        layer, feature, [FROM_UUID_FIELD], ""
++                    ),
++                    "to_feature_uuid": self._read_attr(
++                        layer, feature, [TO_UUID_FIELD], ""
++                    ),
++                    "dari_tiang": self._read_attr(
++                        layer, feature, ["dari_tiang", "id_awal", "from_id"], ""
++                    ),
++                    "ke_tiang": self._read_attr(
++                        layer, feature, ["ke_tiang", "id_akhir", "to_id"], ""
++                    ),
++                    "from_point": (float(start.x()), float(start.y())),
++                    "to_point": (float(end.x()), float(end.y())),
++                    "length": max(0.0, self._effective_length(
++                        layer, feature, geometry
++                    )),
++                    "has_jtm": bool(has_jtm),
++                    "has_jtr": bool(has_jtr),
++                    "is_underbuild": bool(is_underbuild),
++                    "underbuild_path_id": self._read_attr(
++                        layer, feature, ["underbuild_path_id"], ""
++                    ),
++                    "geometry": geometry,
++                })
++                rows.append(values)
++            except Exception as exc:
++                malformed_features.append({
++                    "layer": str(layer.name() or ""),
++                    "fid": int(feature.id()),
++                    "error": str(exc),
++                })
++        if malformed_features:
++            self._underbuild_log(
++                "candidate_parse_failed", context, level=Qgis.Warning,
++                malformed_features=malformed_features,
++                malformed_count=len(malformed_features),
++            )
++        return rows, malformed_features
++
++    def _connect_underbuild_graph_signals(self, layers):
++        """Invalidate graph bila salah satu layer tahap/Existing berubah."""
++        self._disconnect_graph_layer_signals()
++        layers = [layer for layer in (layers or ()) if layer is not None]
++        self._graph_layer = tuple(layers)
++        for layer in layers:
++            for name in (
++                    "geometryChanged", "featureAdded", "featureDeleted",
++                    "attributeValueChanged", "dataChanged"):
++                try:
++                    signal = getattr(layer, name)
++                    slot = self._invalidate_graph
++                    signal.connect(slot)
++                    self._graph_layer_connections.append((signal, slot))
++                except Exception:
++                    pass
++
++    def _underbuild_graph_signature(self, context, layers):
++        layer_parts = []
++        for layer in layers:
++            if layer is None:
++                layer_parts.append(("", -1))
+                 continue
+-            if not pln_project_scope.row_in_scope(scope, values):
+-                continue
+-            if not all_locations:
+-                feature_location_id = str(
+-                    values.get("id_lokasi") or ""
+-                ).strip().casefold()
+-                if location_ids and feature_location_id:
+-                    if feature_location_id not in location_ids:
+-                        continue
+-                elif values["lokasi_proyek"].casefold() != location.casefold():
+-                    continue
+-            allowed.add(int(feature.id()))
+-        return allowed, location + " | " + stage + (
+-            " | Eksisting" if layer_is_existing else ""
++            try:
++                layer_parts.append((str(layer.id()), int(layer.featureCount())))
++            except Exception:
++                layer_parts.append((str(id(layer)), -1))
++        return (
++            context.project_key.casefold(),
++            tuple(value.casefold() for value in context.location_ids),
++            context.location_name.casefold(), context.stage,
++            tuple(layer_parts),
+         )
+ 
+     def _build_graph(self, force=False):
+-        status = _pln_internal_status(self.cbo_data)
++        context = self._underbuild_context_values()
++        if not context.project_key:
++            raise ValueError(
++                "Pilih dan Terapkan Judul Proyek pada F11 sebelum Tambah Underbuild."
++            )
++        if context.location_name.casefold() in (
++                "", "semua lokasi proyek", "semua desa", "semua data",
++                "data tidak ditemukan"):
++            raise ValueError(
++                "Pilih satu Lokasi Proyek pada F11 sebelum Tambah Underbuild."
++            )
++        if not context.location_ids:
++            raise ValueError(
++                "Lokasi Proyek terpilih tidak memiliki identitas kanonik pada "
++                "Judul Proyek aktif. Terapkan ulang pilihan F11 sebelum "
++                "Tambah Underbuild."
++            )
++
++        work_layer = self.plugin.stage_layer("JARINGAN", context.stage)
++        existing_layer = self.plugin.get_layer("JARINGAN_EKSISTING")
++        if work_layer is None and existing_layer is None:
++            raise ValueError("Layer jaringan tahap terpilih dan Existing tidak ditemukan.")
++        layers = [layer for layer in (work_layer, existing_layer) if layer is not None]
++        signature = self._underbuild_graph_signature(context, layers)
+         if (not force and not self._graph_dirty and self._graph is not None
+-                and self._graph_status == status
++                and self._graph_signature == signature
+                 and self._graph.get("underbuild_combined")):
+             return self._graph
+ 
+-        graphs = []
+-        errors = []
+-        original_map = self.DATA_LAYER_MAP
+-        layer_names = []
+-        primary = original_map.get(status)
+-        if primary:
+-            layer_names.append(primary)
+-        if "JARINGAN_EKSISTING" not in layer_names:
+-            layer_names.append("JARINGAN_EKSISTING")
++        if ((self._graph_signature is not None
++                and self._graph_signature != signature)
++                or self._graph_change_requires_repick) and (
++                    self._start_node is not None or self._end_node is not None):
++            self._clear_path_band()
++            self._clear_endpoint_markers()
++            self._start_node = None
++            self._end_node = None
++            self.lbl_start.setText("Belum dipilih")
++            self.lbl_end.setText("Belum dipilih")
++            self._clear_result_values(keep_points=False)
++
++        self._connect_underbuild_graph_signals(layers)
++        work_rows, work_malformed = self._underbuild_network_records(
++            work_layer, "work", context
++        )
++        existing_rows, existing_malformed = self._underbuild_network_records(
++            existing_layer, "existing", context
++        )
++        resolution = pln_underbuild_topology.resolve_candidates(
++            context, work_rows=work_rows, existing_rows=existing_rows
++        )
++
++        crs = self._canvas_crs()
+         try:
+-            for layer_name in layer_names:
+-                self.DATA_LAYER_MAP = dict(original_map)
+-                self.DATA_LAYER_MAP[status] = layer_name
+-                self._graph = None
+-                self._graph_dirty = True
+-                try:
+-                    graphs.append(super()._build_graph(force=True))
+-                except ValueError as exc:
+-                    errors.append(str(exc))
+-        finally:
+-            self.DATA_LAYER_MAP = original_map
+-        if not graphs:
+-            raise ValueError(errors[0] if errors else (
+-                "Belum ada segmen JTM tahap terpilih maupun JTM Eksisting."
+-            ))
++            tolerance = (
++                0.00001 if crs and crs.isValid() and crs.isGeographic()
++                else 0.75
++            )
++        except Exception:
++            tolerance = 0.75
++        raw_graph = pln_underbuild_topology.build_topology(
++            resolution.accepted, tolerance=tolerance
++        )
++        self._underbuild_log(
++            "graph_resolved", context,
++            work_candidates=len(work_rows),
++            existing_candidates=len(existing_rows),
++            accepted=len(resolution.accepted),
++            rejected=dict(resolution.rejection_counts),
++            malformed=len(work_malformed) + len(existing_malformed),
++            topology_invalid=len(raw_graph.get("invalid_records", ())),
++            node_count=len(raw_graph.get("nodes", {})),
++            edge_count=len(raw_graph.get("edges", {})),
++        )
+ 
+-        # Gabungkan node kedua layer pada koordinat yang sama. Graph gabungan
+-        # membuat rute dapat dimulai di JTM tahap, melintas anchor bersama,
+-        # lalu diteruskan pada JTM Eksisting tanpa mencampur lokasi proyek.
+-        graph = graphs[0]
+-        graph["layers"] = [graph.get("layer")]
+-        tolerance = float(graph.get("tolerance") or 0.75)
+-        for extra in graphs[1:]:
+-            graph["layers"].append(extra.get("layer"))
+-            node_map = {}
+-            for old_id, old_node in extra.get("nodes", {}).items():
+-                point = old_node.get("point")
+-                nearest = None
+-                for node_id, node in graph.get("nodes", {}).items():
+-                    other = node.get("point")
+-                    distance = math.hypot(
+-                        float(point.x()) - float(other.x()),
+-                        float(point.y()) - float(other.y()),
+-                    )
+-                    if distance <= tolerance and (
+-                            nearest is None or distance < nearest[0]):
+-                        nearest = (distance, node_id)
+-                if nearest is None:
+-                    new_id = max(graph.get("nodes", {}).keys(), default=-1) + 1
+-                    graph["nodes"][new_id] = old_node
+-                    node_map[old_id] = new_id
+-                else:
+-                    node_map[old_id] = nearest[1]
+-                    target_node = graph["nodes"][nearest[1]]
+-                    for label in old_node.get("labels", []):
+-                        if label not in target_node.get("labels", []):
+-                            target_node.setdefault("labels", []).append(label)
+-                    target_node.setdefault("endpoint_pairs", set()).update(
+-                        old_node.get("endpoint_pairs", set())
+-                    )
+-                    target_node.setdefault("scopes", []).extend(
+-                        old_node.get("scopes", [])
+-                    )
+-            for old_key, old_edge in extra.get("edges", {}).items():
+-                edge = dict(old_edge)
+-                edge["a"] = node_map[old_edge["a"]]
+-                edge["b"] = node_map[old_edge["b"]]
+-                geom_signature = old_key[2] if len(old_key) > 2 else old_key
+-                key = (min(edge["a"], edge["b"]),
+-                       max(edge["a"], edge["b"]), geom_signature)
+-                current = graph["edges"].get(key)
+-                if current is None:
+-                    graph["edges"][key] = edge
+-                else:
+-                    current["length"] = max(
+-                        float(current.get("length") or 0.0),
+-                        float(edge.get("length") or 0.0),
+-                    )
+-                    current["jtm"] = bool(current.get("jtm") or edge.get("jtm"))
+-                    current["jtr"] = bool(current.get("jtr") or edge.get("jtr"))
+-                    current["underbuild"] = bool(
+-                        current.get("underbuild") or edge.get("underbuild")
+-                    )
+-                    current.setdefault("features", []).extend(
+-                        edge.get("features", [])
+-                    )
++        nodes = {}
++        for node_id, source_node in raw_graph.get("nodes", {}).items():
++            point = source_node.get("point")
++            nodes[node_id] = {
++                "point": QgsPointXY(float(point[0]), float(point[1])),
++                "labels": list(source_node.get("labels", ())),
++                "object_type": "",
++                "endpoint_pairs": set(),
++                "scopes": [],
++            }
++        edges = {}
++        for edge_key, source_edge in raw_graph.get("edges", {}).items():
++            feature_refs = []
++            seen_refs = set()
++            for record in source_edge.get("records", ()):
++                feature_layer = record.get("feature_layer")
++                fid = record.get("fid")
++                ref_key = (str(feature_layer.id()), int(fid))
++                if ref_key not in seen_refs:
++                    seen_refs.add(ref_key)
++                    feature_refs.append((feature_layer, int(fid)))
++                scope = {
++                    key: value for key, value in record.items()
++                    if key not in ("feature_layer", "geometry")
++                }
++                from_pair = (
++                    pln_stage.clean(record.get("from_feature_uuid")),
++                    pln_stage.clean(record.get("dari_tiang")),
++                )
++                to_pair = (
++                    pln_stage.clean(record.get("to_feature_uuid")),
++                    pln_stage.clean(record.get("ke_tiang")),
++                )
++                nodes[source_edge["a"]]["endpoint_pairs"].add(from_pair)
++                nodes[source_edge["a"]]["scopes"].append(scope)
++                nodes[source_edge["b"]]["endpoint_pairs"].add(to_pair)
++                nodes[source_edge["b"]]["scopes"].append(scope)
++            edges[edge_key] = {
++                "a": source_edge["a"], "b": source_edge["b"],
++                "length": float(source_edge.get("length") or 0.0),
++                "jtm": bool(source_edge.get("has_jtm")),
++                "jtr": bool(source_edge.get("has_jtr")),
++                "underbuild": bool(source_edge.get("underbuild")),
++                "underbuild_identified": bool(
++                    source_edge.get("underbuild_identified")
++                ),
++                "geometry": source_edge.get("geometry"),
++                "features": feature_refs,
++                "records": list(source_edge.get("records", ())),
++            }
+ 
+-        # Pemilihan rute underbuild hanya boleh berjalan melalui JTM. JTR biasa
+-        # tidak boleh menjadi jalan pintas pada percabangan topologi.
+-        adjacency = {node_id: [] for node_id in graph.get("nodes", {})}
+-        for edge_key, edge in graph.get("edges", {}).items():
+-            if not bool(edge.get("jtm")):
+-                continue
+-            adjacency[edge["a"]].append((edge["b"], edge_key))
+-            adjacency[edge["b"]].append((edge["a"], edge_key))
+-        graph["adjacency"] = adjacency
++        adjacency = {
++            node_id: list(neighbors)
++            for node_id, neighbors in raw_graph.get("adjacency", {}).items()
++        }
+         if not any(adjacency.values()):
+             raise ValueError(
+-                "Tahap terpilih dan JARINGAN_EKSISTING belum memiliki segmen JTM."
++                "Tidak ditemukan jaringan {} pada Lokasi Proyek {}. "
++                "Periksa Judul Proyek, Lokasi Proyek, tahap data, dan atribut "
++                "segmen JTM.".format(context.stage, context.location_name)
+             )
++
++        status = _pln_internal_status(self.cbo_data)
++        graph = {
++            "status": status,
++            "stage": context.stage,
++            "context": context,
++            "layer": work_layer,
++            "layers": layers,
++            "nodes": nodes,
++            "edges": edges,
++            "adjacency": adjacency,
++            "aliases": dict(raw_graph.get("aliases", {})),
++            "tolerance": tolerance,
++            "signature": signature,
++            "active_location": context.location_name,
++            "underbuild_combined": True,
++            "diagnostics": {
++                "rejected": dict(resolution.rejection_counts),
++                "invalid": list(raw_graph.get("invalid_records", ())),
++            },
++        }
+         graph["underbuild_combined"] = True
+-        graph["status"] = status
+         self._graph = graph
+         self._graph_status = status
++        self._graph_signature = signature
+         self._graph_dirty = False
++        self._graph_change_requires_repick = False
+         return graph
+-
+-    def calculate_path(self):
+-        super().calculate_path()
+-        self.btn_apply_underbuild.setEnabled(bool(self._path_edges))
+-        if self._path_edges:
+-            self.lbl_path_info.setText(
+-                self.lbl_path_info.text()
+-                + " Tekan Terapkan untuk menyimpan underbuild pada bentang ini."
+-            )
+-
+-    def reset_measurement(self, clear_graph=False):
++
++    def _shortest_path(self, graph, start, end):
++        return pln_underbuild_topology.shortest_path(graph, start, end)
++
++    def _shortest_path_count(self, graph, start, end):
++        return pln_underbuild_topology.shortest_path_count(graph, start, end)
++
++    def _node_label(self, node_id):
++        base_label = super()._node_label(node_id)
++        node = (self._graph or {}).get("nodes", {}).get(node_id, {})
++        source_kinds = {
++            str(scope.get("source_kind") or "").strip().casefold()
++            for scope in node.get("scopes", ())
++        }
++        has_existing = any(
++            value.startswith("existing") for value in source_kinds
++        )
++        if has_existing and "work" in source_kinds:
++            source_label = "Tahap aktif + Eksisting"
++        elif has_existing:
++            source_label = "Tiang/Gardu Eksisting"
++        else:
++            source_label = "Tiang/Gardu Tahap Aktif"
++        stage_label = pln_stage.stage_short_label(
++            (self._graph or {}).get("stage"), fallback="-"
++        )
++        return "{} • {} • {}".format(base_label, stage_label, source_label)
++
++    def _nearest_node(self, map_point):
++        """Pilih node terdekat secara stabil; minta pilihan bila bertumpuk."""
++        graph = self._build_graph(force=False)
++        candidates = []
++        try:
++            click_tolerance = max(
++                float(self.canvas.mapUnitsPerPixel()) * 18.0,
++                float(graph["tolerance"]) * 2.0,
++            )
++        except Exception:
++            click_tolerance = float(graph["tolerance"]) * 3.0
++        for node_id, node in graph.get("nodes", {}).items():
++            point = node.get("point")
++            distance = math.hypot(
++                float(point.x()) - float(map_point.x()),
++                float(point.y()) - float(map_point.y()),
++            )
++            if distance <= click_tolerance:
++                candidates.append((distance, str(node_id), node_id))
++        candidates = sorted(candidates, key=lambda item: (item[0], item[1]))
++        if not candidates:
++            return None, None
++        nearest_distance = candidates[0][0]
++        ambiguity_tolerance = max(float(graph["tolerance"]) * 0.5, 1e-9)
++        overlapping = [
++            item for item in candidates
++            if item[0] <= nearest_distance + ambiguity_tolerance
++        ]
++        if len(overlapping) > 1:
++            labels = [
++                "{} | {} | {}".format(
++                    self._node_label(item[2]),
++                    pln_stage.stage_short_label(graph.get("stage")),
++                    "node {}".format(item[1]),
++                )
++                for item in overlapping
++            ]
++            choice, accepted = QInputDialog.getItem(
++                self, "Pilih Titik Jaringan",
++                "Beberapa titik bertumpuk. Pilih identitas yang benar:",
++                labels, 0, False,
++            )
++            if not accepted:
++                return None, nearest_distance
++            selected_index = labels.index(choice)
++            return overlapping[selected_index][2], overlapping[selected_index][0]
++        return overlapping[0][2], overlapping[0][0]
++
++    def calculate_path(self):
++        super().calculate_path()
++        if not self._path_edges:
++            self.btn_apply_underbuild.setEnabled(False)
++            return
++        try:
++            graph = self._build_graph(force=False)
++            partition = pln_underbuild_topology.partition_underbuild_edges(
++                graph, self._path_edges
++            )
++            pln_underbuild_topology.existing_underbuild_path_ids(
++                graph, self._path_edges
++            )
++            self.tbl_result.item(6, 1).setText(
++                self._format_m(partition.covered_length)
++            )
++            self.tbl_result.item(7, 1).setText(
++                self._format_m(partition.pending_length)
++            )
++            self.btn_apply_underbuild.setEnabled(bool(partition.pending))
++            if partition.pending:
++                self.lbl_path_info.setText(
++                    self.lbl_path_info.text()
++                    + " {} bentang akan ditambahkan; {} bentang sudah "
++                    "underbuild. Tekan Terapkan untuk menyimpan perubahan."
++                    .format(len(partition.pending), len(partition.covered))
++                )
++            else:
++                self.lbl_path_info.setText(
++                    self.lbl_path_info.text()
++                    + " Seluruh bentang terpilih sudah memiliki underbuild."
++                )
++        except Exception as exc:
++            self.btn_apply_underbuild.setEnabled(False)
++            QMessageBox.warning(self, "Tambah Underbuild", str(exc))
++
++    def _clear_result_values(self, keep_points=False):
++        super()._clear_result_values(keep_points=keep_points)
++        for row in (6, 7):
++            item = self.tbl_result.item(row, 1)
++            if item is None:
++                item = QTableWidgetItem()
++                self.tbl_result.setItem(row, 1, item)
++            item.setText("-")
++
++    def reset_measurement(self, clear_graph=False):
+         super().reset_measurement(clear_graph=clear_graph)
+         try:
+             self.btn_apply_underbuild.setEnabled(False)
+@@ -15699,17 +16014,15 @@ class UnderbuildRangeDialog(DashboardNetworkRangeDialog):
+         return fallback
+ 
+     def _underbuild_overlay_for_existing(self, target_layer, source_feature,
+-                                         selected_stage):
++                                         selected_stage, carrier_reference):
+         """Temukan overlay tahap yang sudah berasal dari segmen Existing."""
+-        source_uuid = pln_stage.clean(self.plugin.get_feature_value_safe(
+-            source_feature, UUID_FIELD, ""
+-        ))
+-        if not source_uuid or target_layer is None:
++        carrier_reference = pln_stage.clean(carrier_reference)
++        if not carrier_reference or target_layer is None:
+             return None
+         source_scope = self.plugin._engineering_feature_values(source_feature)
+         for candidate in target_layer.getFeatures():
+             if pln_stage.clean(self.plugin.get_feature_value_safe(
+-                    candidate, pln_stage.FIELD_PARENT_UID, "")) != source_uuid:
++                    candidate, pln_stage.FIELD_PARENT_UID, "")) != carrier_reference:
+                 continue
+             values = self.plugin._engineering_feature_values(candidate)
+             if values.get("tahap_data") != selected_stage:
+@@ -15733,6 +16046,18 @@ class UnderbuildRangeDialog(DashboardNetworkRangeDialog):
+         except Exception:
+             pass
+         return geometry
++
++    def keyPressEvent(self, event):
++        if event.key() == Qt.Key_Escape:
++            self.reset_measurement(clear_graph=True)
++            event.accept()
++            return
++        super().keyPressEvent(event)
++
++    def closeEvent(self, event):
++        self.reset_measurement(clear_graph=True)
++        self._disconnect_graph_layer_signals()
++        super().closeEvent(event)
+ 
+     def apply_underbuild(self):
+         if not self._path_edges:
+@@ -15741,28 +16066,49 @@ class UnderbuildRangeDialog(DashboardNetworkRangeDialog):
+                 "Pilih dan tampilkan jalur JTM terlebih dahulu."
+             )
+             return
+-        try:
+-            graph = self._build_graph(force=False)
+-        except Exception as exc:
+-            QMessageBox.warning(self, "Tambah Underbuild", str(exc))
+-            return
+-        answer = QMessageBox.question(
+-            self, "Konfirmasi Underbuild",
+-            "Terapkan JTR underbuild pada {} bentang JTM terpilih?\n\n"
+-            "Konstruksi bawah diperbarui otomatis pada tahap terpilih.".format(len(self._path_edges)),
+-            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes,
+-        )
++        try:
++            graph = self._build_graph(force=False)
++            context = graph.get("context") or self._underbuild_context_values()
++            pln_underbuild_topology.validate_selected_path(
++                graph, self._path_edges,
++                start=self._start_node, end=self._end_node,
++                context=context,
++            )
++            partition = pln_underbuild_topology.partition_underbuild_edges(
++                graph, self._path_edges
++            )
++            existing_path_ids = (
++                pln_underbuild_topology.existing_underbuild_path_ids(
++                    graph, self._path_edges
++                )
++            )
++        except Exception as exc:
++            QMessageBox.warning(self, "Tambah Underbuild", str(exc))
++            return
++        if not partition.pending:
++            QMessageBox.information(
++                self, "Tambah Underbuild",
++                "Seluruh bentang pada jalur ini sudah memiliki Underbuild."
++            )
++            return
++        answer = QMessageBox.question(
++            self, "Konfirmasi Underbuild",
++            "Terapkan JTR underbuild pada {} bentang JTM terpilih?\n\n"
++            "{} bentang yang sudah Underbuild tidak akan ditulis ulang.\n"
++            "Konstruksi bawah diperbarui otomatis pada tahap terpilih."
++            .format(len(partition.pending), len(partition.covered)),
++            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes,
++        )
+         if answer != QMessageBox.Yes:
+             return
+ 
+-        graph_layer = graph.get("layer")
+         status = str(graph.get("status") or _pln_internal_status(self.cbo_data))
+         selected_stage = pln_stage.normalize_stage(self.cbo_data.currentText())
+         network_layer = self.plugin.stage_layer("JARINGAN", selected_stage)
+         point_layers = self.plugin.topology_point_layers_for_stage(
+             selected_stage, include_gardu=False
+         )
+-        if graph_layer is None or network_layer is None or not point_layers:
++        if network_layer is None or not point_layers:
+             QMessageBox.warning(
+                 self, "Tambah Underbuild",
+                 "Layer jaringan atau node tiang {} tidak ditemukan.".format(status)
+@@ -15791,38 +16137,75 @@ class UnderbuildRangeDialog(DashboardNetworkRangeDialog):
+         component_ids = set()
+         endpoint_ids = set()
+         endpoint_pairs = set()
+-        already_underbuild = 0
++        already_underbuild = len(partition.covered)
+         seen_fids = set()
+-        for edge_key in self._path_edges:
++        for edge_key in partition.pending:
+             edge = graph.get("edges", {}).get(edge_key) or {}
+             resolved = self._network_feature_for_edge(graph, edge)
+             if resolved is None:
+-                continue
++                QMessageBox.warning(
++                    self, "Tambah Underbuild",
++                    "Satu segmen jalur berubah atau tidak lagi tersedia. "
++                    "Tampilkan ulang jalur sebelum menerapkan Underbuild."
++                )
++                return
+             source_layer, feature = resolved
+-            source_key = (str(source_layer.id()), int(feature.id()))
+-            if source_key in seen_fids:
+-                continue
+             source_is_existing = (
+                 "EKSISTING" in str(source_layer.name() or "").upper()
+                 and source_layer.id() != network_layer.id()
+             )
++            carrier_reference = ""
+             if source_is_existing:
++                source_record = next((
++                    row for row in edge.get("records", ())
++                    if row.get("feature_layer") is source_layer
++                    and int(row.get("fid")) == int(feature.id())
++                ), {})
++                carrier_reference = (
++                    pln_underbuild_topology.existing_carrier_reference(
++                        source_record
++                    )
++                )
++                if not carrier_reference:
++                    QMessageBox.warning(
++                        self, "Tambah Underbuild",
++                        "Identitas stabil segmen Existing tidak tersedia. "
++                        "Isi feature_uuid/uid_objek atau id_segmen terlebih "
++                        "dahulu; tidak ada data yang diubah."
++                    )
++                    return
+                 existing_overlay = self._underbuild_overlay_for_existing(
+-                    network_layer, feature, selected_stage
++                    network_layer, feature, selected_stage,
++                    carrier_reference,
+                 )
+                 if existing_overlay is not None:
+-                    already_underbuild += 1
+-                    continue
++                    overlay_path = pln_stage.clean(
++                        self.plugin.get_feature_value_safe(
++                            existing_overlay, "underbuild_path_id", ""
++                        )
++                    )
++                    if overlay_path:
++                        already_underbuild += 1
++                        continue
++                    source_layer = network_layer
++                    feature = existing_overlay
++                    source_is_existing = False
++                    carrier_reference = ""
+             if bool(edge.get("underbuild")):
+                 existing_path = pln_stage.clean(self.plugin.get_feature_value_safe(
+                     feature, "underbuild_path_id", ""))
+                 if existing_path:
+                     already_underbuild += 1
+                     continue
+-                # Legacy route: the two endpoints selected by the user recover
+-                # its missing logical identity without guessing branch history.
++                # Legacy route: the two endpoints selected by the user recover
++                # its missing logical identity without guessing branch history.
++            source_key = (str(source_layer.id()), int(feature.id()))
++            if source_key in seen_fids:
++                continue
+             seen_fids.add(source_key)
+-            target_features.append((source_layer, feature, source_is_existing))
++            target_features.append((
++                source_layer, feature, source_is_existing, carrier_reference
++            ))
+             component_id = str(
+                 self.plugin.get_feature_value_safe(feature, "id_jalur", "") or ""
+             ).strip()
+@@ -15858,7 +16241,7 @@ class UnderbuildRangeDialog(DashboardNetworkRangeDialog):
+         )
+         if any(not pln_underbuild.same_location_scope(
+                 source_scope, self.plugin._engineering_feature_values(f))
+-                for _layer, f, _existing in target_features):
++                for _layer, f, _existing, _carrier in target_features):
+             QMessageBox.warning(
+                 self, "Tambah Underbuild",
+                 "Pilih jalur dalam satu Lokasi Proyek."
+@@ -15867,15 +16250,31 @@ class UnderbuildRangeDialog(DashboardNetworkRangeDialog):
+         engineering_scope = dict(source_scope)
+         engineering_scope["tahap_data"] = selected_stage
+         engineering_scope["status_data"] = status
+-        path_id = new_feature_uuid()
++        path_id = (
++            existing_path_ids[0] if existing_path_ids
++            else new_feature_uuid()
++        )
+         transaction = ClickTransaction(
+             list(point_layers) + [network_layer],
+             "SIGAMON - tambah underbuild dari titik ke titik",
+         )
+-        changed = 0
+-        try:
+-            transaction.begin()
+-            for source_layer, feature, source_is_existing in target_features:
++        changed = 0
++        try:
++            transaction.begin()
++            self._underbuild_log(
++                "transaction_begin", context,
++                start_node=self._start_node,
++                end_node=self._end_node,
++                candidate_edges=len(graph.get("edges", {})),
++                selected_path=list(self._path_edges),
++                pending_path=list(partition.pending),
++                existing_edges=len(partition.covered),
++                planned_edges=len(partition.pending),
++                underbuild_run_uuid=path_id,
++                provider=str(network_layer.providerType() or ""),
++            )
++            for (source_layer, feature, source_is_existing,
++                 carrier_reference) in target_features:
+                 updates = {
+                     "status_underbuild": "Ya",
+                     "underbuild_path_id": path_id,
+@@ -15896,9 +16295,7 @@ class UnderbuildRangeDialog(DashboardNetworkRangeDialog):
+                         UUID_FIELD: new_uuid,
+                         pln_stage.FIELD_OBJECT_UID: new_uuid,
+                         pln_stage.FIELD_PARENT_UID: pln_stage.clean(
+-                            self.plugin.get_feature_value_safe(
+-                                feature, UUID_FIELD, ""
+-                            )
++                            carrier_reference
+                         ),
+                         pln_stage.FIELD_VERSION_SOURCE: pln_stage.STAGE_EKSISTING,
+                         pln_stage.FIELD_STAGE: selected_stage,
+@@ -16031,13 +16428,35 @@ class UnderbuildRangeDialog(DashboardNetworkRangeDialog):
+                 component_ids, endpoint_ids, transaction,
+                 endpoint_pairs=endpoint_pairs,
+             )
+-            transaction.commit()
+-            self._applied_underbuild = True
+-        except Exception as exc:
+-            try:
+-                transaction.abort()
+-            except Exception:
+-                pass
++            transaction.commit()
++            self._applied_underbuild = True
++            self._underbuild_log(
++                "transaction_commit", context,
++                start_node=self._start_node,
++                end_node=self._end_node,
++                selected_path=list(self._path_edges),
++                underbuild_run_uuid=path_id,
++                transaction_result="commit",
++                changed_edges=changed,
++                construction_changes=len(endpoint_pairs),
++                boq_impact="recalculate_from_underbuild_topology",
++            )
++        except Exception as exc:
++            try:
++                transaction.abort()
++            except Exception:
++                pass
++            self._underbuild_log(
++                "transaction_rollback", context, level=Qgis.Critical,
++                start_node=self._start_node,
++                end_node=self._end_node,
++                selected_path=list(self._path_edges),
++                underbuild_run_uuid=path_id,
++                transaction_result="rollback",
++                root_exception=repr(exc),
++                provider=str(network_layer.providerType() or ""),
++                feature_count=int(network_layer.featureCount()),
++            )
+             QMessageBox.critical(
+                 self, "Tambah Underbuild",
+                 "Underbuild gagal diterapkan dan seluruh perubahan dibatalkan:\n{}"
+diff --git a/tests/test_underbuild_topology.py b/tests/test_underbuild_topology.py
+new file mode 100644
+index 0000000..c3213b9
+--- /dev/null
++++ b/tests/test_underbuild_topology.py
+@@ -0,0 +1,630 @@
++# -*- coding: utf-8 -*-
++"""Behavior tests for the QGIS-free Underbuild topology engine."""
++import ast
++import unittest
++
++try:
++    import _bootstrap
++except ModuleNotFoundError:
++    from tests import _bootstrap
++
++read_module = _bootstrap.read_module
++
++try:
++    import underbuild_topology as topology
++except ModuleNotFoundError:
++    topology = None
++
++
++def work_row(edge, stage, project="P-2026", location_id="LOC-A",
++             location_name="Kayawu", **extra):
++    row = {
++        "feature_uuid": edge,
++        "tahap_data": stage,
++        "status_data": "Aktual" if stage == "Realisasi" else "Rencana",
++        "id_proyek": project,
++        "id_lokasi": location_id,
++        "lokasi_proyek": location_name,
++        "source_kind": "work",
++    }
++    row.update(extra)
++    return row
++
++
++def existing_row(edge, project="P-2026", location_id="LOC-A",
++                 location_name="Kayawu", **extra):
++    row = {
++        "feature_uuid": edge,
++        "tahap_data": "Eksisting",
++        "status_data": "Eksisting",
++        "id_proyek": project,
++        "id_lokasi": location_id,
++        "lokasi_proyek": location_name,
++        "source_kind": "existing",
++    }
++    row.update(extra)
++    return row
++
++
++def topology_edge(edge, start, end, length=50.0, source="work",
++                  underbuild=False, has_jtm=True, has_jtr=False, **extra):
++    row = {
++        "feature_uuid": edge,
++        "from_point": start,
++        "to_point": end,
++        "from_feature_uuid": "NODE-{}-{}".format(start[0], start[1]),
++        "to_feature_uuid": "NODE-{}-{}".format(end[0], end[1]),
++        "length": length,
++        "source_kind": source,
++        "has_jtm": has_jtm,
++        "has_jtr": has_jtr,
++        "is_underbuild": underbuild,
++    }
++    row.update(extra)
++    return row
++
++
++class CandidateResolverTests(unittest.TestCase):
++    """Each test catches a wrong scope/stage branch in the resolver."""
++
++    def setUp(self):
++        self.assertIsNotNone(
++            topology,
++            "underbuild_topology.py must provide the scoped resolver",
++        )
++        self.context = topology.UnderbuildContext(
++            project_key="P-2026",
++            location_ids=("LOC-A",),
++            location_name="Kayawu",
++            stage="Rencana Awal",
++        )
++
++    def test_rencana_awal_never_accepts_rencana_akhir(self):
++        result = topology.resolve_candidates(
++            self.context,
++            [work_row("AWAL", "Rencana Awal"),
++             work_row("AKHIR", "Rencana Akhir")],
++            [],
++        )
++        self.assertEqual(["AWAL"], [row["feature_uuid"] for row in result.accepted])
++        self.assertEqual(1, result.rejection_counts["stage_mismatch"])
++
++    def test_legacy_empty_plan_stage_belongs_only_to_rencana_awal(self):
++        legacy = work_row("LEGACY", "")
++        awal = topology.resolve_candidates(self.context, [legacy], [])
++        akhir = topology.resolve_candidates(
++            topology.UnderbuildContext(
++                "P-2026", ("LOC-A",), "Kayawu", "Rencana Akhir"
++            ),
++            [legacy],
++            [],
++        )
++        self.assertEqual(["LEGACY"], [row["feature_uuid"] for row in awal.accepted])
++        self.assertEqual([], akhir.accepted)
++
++    def test_realisasi_accepts_only_realisasi_work_rows(self):
++        context = topology.UnderbuildContext(
++            "P-2026", ("LOC-A",), "Kayawu", "Realisasi"
++        )
++        result = topology.resolve_candidates(
++            context,
++            [work_row("REAL", "Realisasi"), work_row("PLAN", "Rencana Awal")],
++            [],
++        )
++        self.assertEqual(["REAL"], [row["feature_uuid"] for row in result.accepted])
++
++    def test_existing_is_shared_across_stages_but_not_across_projects(self):
++        result = topology.resolve_candidates(
++            self.context,
++            [],
++            [existing_row("RIGHT"), existing_row("WRONG", project="P-2027")],
++        )
++        self.assertEqual(["RIGHT"], [row["feature_uuid"] for row in result.accepted])
++        self.assertEqual(1, result.rejection_counts["project_mismatch"])
++
++    def test_project_key_field_is_an_authoritative_project_identity(self):
++        row = work_row("EDGE", "Rencana Awal", project="")
++        row["project_key"] = "P-2026"
++        result = topology.resolve_candidates(self.context, [row], [])
++        self.assertEqual(["EDGE"], [item["feature_uuid"] for item in result.accepted])
++
++    def test_conflicting_location_id_is_rejected_even_when_name_matches(self):
++        result = topology.resolve_candidates(
++            self.context,
++            [work_row("OTHER", "Rencana Awal", location_id="LOC-B")],
++            [],
++        )
++        self.assertEqual([], result.accepted)
++        self.assertEqual(1, result.rejection_counts["location_mismatch"])
++
++    def test_location_name_is_a_fallback_only_when_row_has_no_location_id(self):
++        legacy = work_row("LEGACY", "Rencana Awal", location_id="")
++        wrong = work_row(
++            "WRONG", "Rencana Awal", location_id="", location_name="Tetangga"
++        )
++        result = topology.resolve_candidates(self.context, [legacy, wrong], [])
++        self.assertEqual(["LEGACY"], [row["feature_uuid"] for row in result.accepted])
++        self.assertEqual(1, result.rejection_counts["location_mismatch"])
++
++    def test_name_only_legacy_row_without_project_identity_is_not_guessed(self):
++        ambiguous = work_row(
++            "AMBIGUOUS", "Rencana Awal", project="", location_id=""
++        )
++        result = topology.resolve_candidates(self.context, [ambiguous], [])
++        self.assertEqual([], result.accepted)
++        self.assertEqual(1, result.rejection_counts["project_missing"])
++
++    def test_unresolved_selected_location_rejects_rows_with_unchecked_ids(self):
++        context = topology.UnderbuildContext(
++            "P-2026", (), "Kayawu", "Rencana Awal"
++        )
++        result = topology.resolve_candidates(
++            context,
++            [work_row("LOC-A", "Rencana Awal", location_id="LOC-A"),
++             work_row("LOC-B", "Rencana Awal", location_id="LOC-B")],
++            [],
++        )
++        self.assertEqual([], result.accepted)
++        self.assertEqual(2, result.rejection_counts["location_unresolved"])
++
++    def test_every_rejected_candidate_keeps_a_diagnostic_reason(self):
++        result = topology.resolve_candidates(
++            self.context,
++            [work_row("STAGE", "Rencana Akhir"),
++             work_row("PROJECT", "Rencana Awal", project="P-2027"),
++             work_row("LOCATION", "Rencana Awal", location_id="LOC-B")],
++            [],
++        )
++        self.assertEqual(3, len(result.rejected))
++        self.assertEqual(
++            {"stage_mismatch": 1, "project_mismatch": 1,
++             "location_mismatch": 1},
++            dict(result.rejection_counts),
++        )
++
++
++class TopologyGraphTests(unittest.TestCase):
++    """Each test catches a wrong edge identity or path-selection branch."""
++
++    def setUp(self):
++        self.assertTrue(
++            hasattr(topology, "build_topology"),
++            "the deterministic Underbuild graph API is not implemented yet",
++        )
++
++    def test_planned_only_network_has_one_connected_path(self):
++        graph = topology.build_topology([
++            topology_edge("AB", (0, 0), (1, 0)),
++            topology_edge("BC", (1, 0), (2, 0)),
++            topology_edge("CD", (2, 0), (3, 0)),
++        ], tolerance=0.01)
++        path = topology.shortest_path(graph, "NODE-0-0", "NODE-3-0")
++        self.assertEqual(["UUID:ab", "UUID:bc", "UUID:cd"], path)
++
++    def test_planned_and_existing_edges_share_an_explicit_endpoint(self):
++        work = topology_edge("AB", (0, 0), (1, 0))
++        existing = topology_edge("BC", (1.004, 0), (2, 0), source="existing")
++        existing["from_feature_uuid"] = work["to_feature_uuid"]
++        graph = topology.build_topology([work, existing], tolerance=0.01)
++        path = topology.shortest_path(graph, "NODE-0-0", "NODE-2-0")
++        self.assertEqual(["UUID:ab", "UUID:bc"], path)
++
++    def test_missing_endpoint_identity_uses_tolerant_spatial_fallback(self):
++        work = topology_edge("AB", (0, 0), (1, 0))
++        existing = topology_edge("BC", (1.004, 0), (2, 0), source="existing")
++        existing["from_feature_uuid"] = ""
++        graph = topology.build_topology([work, existing], tolerance=0.01)
++        self.assertEqual(
++            ["UUID:ab", "UUID:bc"],
++            topology.shortest_path(graph, "NODE-0-0", "NODE-2-0"),
++        )
++
++    def test_conflicting_endpoint_uuids_are_not_merged_by_coordinates(self):
++        first = topology_edge("AB", (0, 0), (1, 0))
++        second = topology_edge("CD", (1, 0), (2, 0))
++        second["from_feature_uuid"] = "DIFFERENT-NODE"
++        graph = topology.build_topology([first, second], tolerance=0.01)
++        self.assertEqual(
++            [], topology.shortest_path(graph, "NODE-0-0", "NODE-2-0")
++        )
++
++    def test_existing_only_network_is_traversable(self):
++        graph = topology.build_topology([
++            topology_edge("AB", (0, 0), (1, 0), source="existing"),
++            topology_edge("BC", (1, 0), (2, 0), source="existing"),
++        ], tolerance=0.01)
++        self.assertEqual(
++            ["UUID:ab", "UUID:bc"],
++            topology.shortest_path(graph, "NODE-0-0", "NODE-2-0"),
++        )
++
++    def test_nearby_other_project_edges_never_enter_the_graph(self):
++        context = topology.UnderbuildContext(
++            "P-2026", ("LOC-A",), "Kayawu", "Rencana Awal"
++        )
++        own = work_row("OWN", "Rencana Awal")
++        own.update(topology_edge("OWN", (0, 0), (1, 0)))
++        other = work_row("OTHER", "Rencana Awal", project="P-2027",
++                         location_id="LOC-B")
++        other.update(topology_edge("OTHER", (0, 0.001), (1, 0.001)))
++        resolved = topology.resolve_candidates(context, [own, other], [])
++        graph = topology.build_topology(resolved.accepted, tolerance=0.01)
++        self.assertEqual(["UUID:own"], sorted(graph["edges"]))
++
++    def test_equal_shortest_branches_are_reported_as_ambiguous(self):
++        graph = topology.build_topology([
++            topology_edge("AB", (0, 0), (1, 1), length=1),
++            topology_edge("BD", (1, 1), (2, 0), length=1),
++            topology_edge("AC", (0, 0), (1, -1), length=1),
++            topology_edge("CD", (1, -1), (2, 0), length=1),
++        ], tolerance=0.01)
++        self.assertEqual(
++            2,
++            topology.shortest_path_count(graph, "NODE-0-0", "NODE-2-0"),
++        )
++
++    def test_jtr_only_edge_cannot_shortcut_the_jtm_host_path(self):
++        graph = topology.build_topology([
++            topology_edge("AB", (0, 0), (1, 0), length=10),
++            topology_edge("BD", (1, 0), (2, 0), length=10),
++            topology_edge("AD-JTR", (0, 0), (2, 0), length=1,
++                          has_jtm=False, has_jtr=True),
++        ], tolerance=0.01)
++        self.assertEqual(
++            ["UUID:ab", "UUID:bd"],
++            topology.shortest_path(graph, "NODE-0-0", "NODE-2-0"),
++        )
++
++    def test_duplicate_reads_of_one_host_edge_are_deduplicated(self):
++        original = topology_edge("HOST", (0, 0), (1, 0), source="existing")
++        overlay = topology_edge(
++            "OVERLAY", (0, 0), (1, 0), source="existing_overlay",
++            underbuild=True,
++            has_jtm=False, has_jtr=True, parent_uid="HOST"
++        )
++        graph = topology.build_topology([original, overlay], tolerance=0.01)
++        self.assertEqual(["UUID:host"], sorted(graph["edges"]))
++        edge = graph["edges"]["UUID:host"]
++        self.assertTrue(edge["has_jtm"])
++        self.assertTrue(edge["has_jtr"])
++        self.assertTrue(edge["underbuild"])
++        self.assertEqual(2, len(edge["records"]))
++
++    def test_work_features_sharing_provenance_keep_distinct_edge_identities(self):
++        first = topology_edge(
++            "REV-A", (0, 0), (1, 0), parent_uid="SOURCE-EDGE"
++        )
++        second = topology_edge(
++            "REV-B", (1, 0), (2, 0), parent_uid="SOURCE-EDGE"
++        )
++        graph = topology.build_topology([first, second], tolerance=0.01)
++        self.assertEqual(["UUID:rev-a", "UUID:rev-b"], sorted(graph["edges"]))
++        self.assertEqual([], graph["invalid_records"])
++
++    def test_anonymous_points_in_one_rounding_bucket_still_obey_tolerance(self):
++        first = topology_edge("AB", (-0.49, -0.49), (10, 0))
++        second = topology_edge("CD", (0.49, 0.49), (-10, 0))
++        for row in (first, second):
++            row["from_feature_uuid"] = ""
++            row["to_feature_uuid"] = ""
++        graph = topology.build_topology([first, second], tolerance=1.0)
++        self.assertNotEqual(
++            graph["edges"]["UUID:ab"]["a"],
++            graph["edges"]["UUID:cd"]["a"],
++        )
++
++    def test_bucket_ambiguity_does_not_disable_unique_nearby_fallback(self):
++        first = topology_edge("AB", (-0.49, -0.49), (10, 0))
++        second = topology_edge("CD", (0.49, 0.49), (-10, 0))
++        third = topology_edge("EF", (-0.45, -0.45), (0, 10))
++        for row in (first, second, third):
++            row["from_feature_uuid"] = ""
++            row["to_feature_uuid"] = ""
++        graph = topology.build_topology([first, second, third], tolerance=1.0)
++        self.assertEqual(
++            graph["edges"]["UUID:ab"]["a"],
++            graph["edges"]["UUID:ef"]["a"],
++        )
++        self.assertNotEqual(
++            graph["edges"]["UUID:cd"]["a"],
++            graph["edges"]["UUID:ef"]["a"],
++        )
++
++    def test_reapplying_a_fully_covered_path_has_no_new_edges(self):
++        graph = topology.build_topology([
++            topology_edge(
++                "AB", (0, 0), (1, 0), underbuild=True,
++                underbuild_path_id="PATH-1",
++            ),
++            topology_edge(
++                "BC", (1, 0), (2, 0), underbuild=True,
++                underbuild_path_id="PATH-1",
++            ),
++        ], tolerance=0.01)
++        path = topology.shortest_path(graph, "NODE-0-0", "NODE-2-0")
++        partition = topology.partition_underbuild_edges(graph, path)
++        self.assertEqual(["UUID:ab", "UUID:bc"], partition.covered)
++        self.assertEqual([], partition.pending)
++
++    def test_partial_extension_adds_only_uncovered_edges(self):
++        graph = topology.build_topology([
++            topology_edge(
++                "AB", (0, 0), (1, 0), underbuild=True,
++                underbuild_path_id="PATH-1",
++            ),
++            topology_edge("BC", (1, 0), (2, 0)),
++            topology_edge("CD", (2, 0), (3, 0)),
++        ], tolerance=0.01)
++        path = topology.shortest_path(graph, "NODE-0-0", "NODE-3-0")
++        partition = topology.partition_underbuild_edges(graph, path)
++        self.assertEqual(["UUID:ab"], partition.covered)
++        self.assertEqual(["UUID:bc", "UUID:cd"], partition.pending)
++
++    def test_legacy_underbuild_without_path_identity_remains_pending_for_recovery(self):
++        graph = topology.build_topology([
++            topology_edge("AB", (0, 0), (1, 0), underbuild=True),
++            topology_edge(
++                "BC", (1, 0), (2, 0), underbuild=True,
++                underbuild_path_id="PATH-1",
++            ),
++        ], tolerance=0.01)
++        partition = topology.partition_underbuild_edges(
++            graph, ["UUID:ab", "UUID:bc"]
++        )
++        self.assertEqual(["UUID:bc"], partition.covered)
++        self.assertEqual(["UUID:ab"], partition.pending)
++        self.assertEqual(["UUID:ab"], partition.legacy_unidentified)
++
++    def test_existing_carrier_reference_uses_stable_segment_when_uuid_is_missing(self):
++        self.assertEqual(
++            "SEGMENT:LEGACY-17",
++            topology.existing_carrier_reference({"id_segmen": "LEGACY-17"}),
++        )
++        self.assertEqual(
++            "",
++            topology.existing_carrier_reference({
++                "source_layer_id": "layer", "fid": 17,
++            }),
++        )
++
++    def test_partial_extension_reuses_one_adjacent_underbuild_path_identity(self):
++        graph = topology.build_topology([
++            topology_edge(
++                "AB", (0, 0), (1, 0), underbuild=True,
++                underbuild_path_id="PATH-EXISTING",
++            ),
++            topology_edge("BC", (1, 0), (2, 0)),
++        ], tolerance=0.01)
++        self.assertEqual(
++            ("PATH-EXISTING",),
++            topology.existing_underbuild_path_ids(
++                graph, ["UUID:ab", "UUID:bc"]
++            ),
++        )
++
++    def test_extension_between_two_existing_routes_is_rejected_as_ambiguous(self):
++        graph = topology.build_topology([
++            topology_edge(
++                "AB", (0, 0), (1, 0), underbuild=True,
++                underbuild_path_id="PATH-A",
++            ),
++            topology_edge("BC", (1, 0), (2, 0)),
++            topology_edge(
++                "CD", (2, 0), (3, 0), underbuild=True,
++                underbuild_path_id="PATH-B",
++            ),
++        ], tolerance=0.01)
++        with self.assertRaisesRegex(ValueError, "lebih dari satu identitas"):
++            topology.existing_underbuild_path_ids(
++                graph, ["UUID:ab", "UUID:bc", "UUID:cd"]
++            )
++
++    def test_path_validation_rejects_a_disconnected_edge_sequence(self):
++        graph = topology.build_topology([
++            topology_edge("ab", (0, 0), (1, 0)),
++            topology_edge("cd", (2, 0), (3, 0)),
++        ], tolerance=0.01)
++        with self.assertRaisesRegex(ValueError, "tidak tersambung"):
++            topology.validate_selected_path(
++                graph, ["UUID:ab", "UUID:cd"],
++                start="NODE-0-0", end="NODE-3-0"
++            )
++
++    def test_path_validation_rejects_a_non_jtm_edge(self):
++        graph = topology.build_topology([
++            topology_edge(
++                "ab", (0, 0), (1, 0), has_jtm=False, has_jtr=True
++            ),
++        ], tolerance=0.01)
++        with self.assertRaisesRegex(ValueError, "bukan host JTM"):
++            topology.validate_selected_path(
++                graph, ["UUID:ab"], start="NODE-0-0", end="NODE-1-0"
++            )
++
++    def test_path_validation_accepts_the_exact_connected_endpoints(self):
++        graph = topology.build_topology([
++            topology_edge("ab", (0, 0), (1, 0)),
++            topology_edge("bc", (1, 0), (2, 0)),
++        ], tolerance=0.01)
++        self.assertEqual(
++            ["UUID:ab", "UUID:bc"],
++            topology.validate_selected_path(
++                graph, ["UUID:ab", "UUID:bc"],
++                start="NODE-0-0", end="NODE-2-0"
++            ),
++        )
++
++
++def method_source(source, class_name, method_name):
++    tree = ast.parse(source)
++    for node in tree.body:
++        if not isinstance(node, ast.ClassDef) or node.name != class_name:
++            continue
++        for child in node.body:
++            if isinstance(child, ast.FunctionDef) and child.name == method_name:
++                return ast.get_source_segment(source, child) or ""
++    raise AssertionError("{}.{} was not found".format(class_name, method_name))
++
++
++class DiagnosticEventTests(unittest.TestCase):
++    def setUp(self):
++        self.assertTrue(
++            hasattr(topology, "diagnostic_event"),
++            "structured Underbuild diagnostics are not implemented yet",
++        )
++
++    def test_diagnostic_event_keeps_the_required_underbuild_context(self):
++        context = topology.UnderbuildContext(
++            "P-2026", ("LOC-A",), "Kayawu", "Rencana Awal"
++        )
++        event = topology.diagnostic_event(
++            "resolve", context, candidate_edges=4, selected_path=["UUID:ab"]
++        )
++        self.assertEqual("resolve", event["action"])
++        self.assertEqual("P-2026", event["project"])
++        self.assertEqual("Kayawu", event["location"])
++        self.assertEqual("Rencana Awal", event["stage"])
++        self.assertEqual(4, event["candidate_edges"])
++        self.assertEqual(["UUID:ab"], event["selected_path"])
++
++
++class PluginIntegrationContractTests(unittest.TestCase):
++    """Wiring checks at the QGIS boundary; graph behavior is tested above."""
++
++    @classmethod
++    def setUpClass(cls):
++        cls.source = read_module("plugin.py")
++
++    def test_plugin_imports_the_dedicated_topology_engine(self):
++        self.assertIn("underbuild_topology as pln_underbuild_topology", self.source)
++
++    def test_underbuild_context_is_explicitly_stage_project_and_location(self):
++        body = method_source(
++            self.source, "UnderbuildRangeDialog", "_underbuild_context_values"
++        )
++        self.assertIn("active_project_id", body)
++        self.assertIn("project_location_ids_for_name", body)
++        self.assertIn("normalize_stage", body)
++        self.assertIn("UnderbuildContext", body)
++
++    def test_underbuild_context_refreshes_the_current_applied_location(self):
++        body = method_source(
++            self.source, "UnderbuildRangeDialog", "_underbuild_context_values"
++        )
++        self.assertIn("_pln_f11_export_selected_location", body)
++        self.assertIn("_source_dashboard", body)
++        self.assertIn("_fullscreen_selected_location", body)
++
++    def test_constructor_preserves_real_dashboard_separately_from_range_adapter(self):
++        body = method_source(self.source, "UnderbuildRangeDialog", "__init__")
++        self.assertIn("self._source_dashboard = dashboard", body)
++
++    def test_underbuild_graph_does_not_rewrite_the_generic_data_layer_map(self):
++        body = method_source(self.source, "UnderbuildRangeDialog", "_build_graph")
++        self.assertNotIn("self.DATA_LAYER_MAP =", body)
++        self.assertIn("resolve_candidates", body)
++        self.assertIn("build_topology", body)
++
++    def test_work_and_existing_are_resolved_in_one_graph_operation(self):
++        body = method_source(self.source, "UnderbuildRangeDialog", "_build_graph")
++        self.assertIn('stage_layer("JARINGAN", context.stage)', body)
++        self.assertIn('get_layer("JARINGAN_EKSISTING")', body)
++        self.assertIn("work_rows", body)
++        self.assertIn("existing_rows", body)
++
++    def test_feature_parse_failures_are_logged_instead_of_silently_dropped(self):
++        body = method_source(
++            self.source, "UnderbuildRangeDialog", "_underbuild_network_records"
++        )
++        self.assertIn("malformed_features", body)
++        self.assertIn("_underbuild_log", body)
++        self.assertNotIn("except Exception:\n                continue", body)
++
++    def test_all_source_layers_are_watched_for_graph_invalidation(self):
++        body = method_source(
++            self.source, "UnderbuildRangeDialog", "_connect_underbuild_graph_signals"
++        )
++        self.assertIn("for layer in layers", body)
++        self.assertIn("self._graph_layer_connections.append", body)
++
++    def test_empty_graph_error_names_the_selected_stage_and_location(self):
++        body = method_source(self.source, "UnderbuildRangeDialog", "_build_graph")
++        self.assertIn("context.stage", body)
++        self.assertIn("context.location_name", body)
++        self.assertIn("Tidak ditemukan jaringan {} pada Lokasi Proyek {}", body)
++
++    def test_preview_separates_covered_and_pending_underbuild_lengths(self):
++        body = method_source(
++            self.source, "UnderbuildRangeDialog", "calculate_path"
++        )
++        self.assertIn("partition_underbuild_edges", body)
++        self.assertIn("covered_length", body)
++        self.assertIn("pending_length", body)
++
++    def test_apply_validates_and_writes_only_pending_host_edges(self):
++        body = method_source(
++            self.source, "UnderbuildRangeDialog", "apply_underbuild"
++        )
++        self.assertIn("validate_selected_path", body)
++        self.assertIn("partition_underbuild_edges", body)
++        self.assertIn("partition.pending", body)
++        self.assertNotIn("for edge_key in self._path_edges", body)
++
++    def test_transaction_outcomes_are_structured_logs(self):
++        body = method_source(
++            self.source, "UnderbuildRangeDialog", "apply_underbuild"
++        )
++        self.assertIn('"transaction_begin"', body)
++        self.assertIn('"transaction_commit"', body)
++        self.assertIn('"transaction_rollback"', body)
++
++    def test_close_and_escape_clear_temporary_preview_state(self):
++        close_body = method_source(
++            self.source, "UnderbuildRangeDialog", "closeEvent"
++        )
++        key_body = method_source(
++            self.source, "UnderbuildRangeDialog", "keyPressEvent"
++        )
++        self.assertIn("reset_measurement(clear_graph=True)", close_body)
++        self.assertIn("Qt.Key_Escape", key_body)
++        self.assertIn("reset_measurement(clear_graph=True)", key_body)
++
++    def test_overlay_geometry_is_returned_and_close_event_never_returns_it(self):
++        geometry_body = method_source(
++            self.source, "UnderbuildRangeDialog", "_underbuild_overlay_geometry"
++        )
++        close_body = method_source(
++            self.source, "UnderbuildRangeDialog", "closeEvent"
++        )
++        self.assertIn("return geometry", geometry_body)
++        self.assertNotIn("return geometry", close_body)
++
++    def test_existing_overlay_uses_a_nonempty_stable_carrier_reference(self):
++        lookup_body = method_source(
++            self.source, "UnderbuildRangeDialog",
++            "_underbuild_overlay_for_existing"
++        )
++        apply_body = method_source(
++            self.source, "UnderbuildRangeDialog", "apply_underbuild"
++        )
++        self.assertIn("carrier_reference", lookup_body)
++        self.assertIn("existing_carrier_reference", apply_body)
++        self.assertIn("Identitas stabil segmen Existing", apply_body)
++
++    def test_partial_extension_reuses_the_existing_path_identity(self):
++        apply_body = method_source(
++            self.source, "UnderbuildRangeDialog", "apply_underbuild"
++        )
++        self.assertIn("existing_underbuild_path_ids", apply_body)
++        self.assertIn("existing_path_ids[0]", apply_body)
++
++    def test_overlapping_click_candidates_have_deterministic_selection_ui(self):
++        body = method_source(
++            self.source, "UnderbuildRangeDialog", "_nearest_node"
++        )
++        self.assertIn("QInputDialog.getItem", body)
++        self.assertIn("sorted", body)
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/underbuild_topology.py b/underbuild_topology.py
+new file mode 100644
+index 0000000..c95499f
+--- /dev/null
++++ b/underbuild_topology.py
+@@ -0,0 +1,561 @@
++# -*- coding: utf-8 -*-
++"""Pure resolver and topology rules for SIGAMON Underbuild.
++
++The module deliberately has no QGIS imports.  ``plugin.py`` converts layer
++features to dictionaries and this module decides which records belong to the
++selected project/location/stage before any geometry or mutation is attempted.
++"""
++from __future__ import annotations
++
++from collections import Counter
++from dataclasses import dataclass
++import heapq
++import math
++import re
++
++import stage_model
++
++
++def clean(value):
++    """Return a stable comparison string without null-like placeholders."""
++    try:
++        text = re.sub(r"\s+", " ", str(value if value is not None else "").strip())
++    except Exception:
++        return ""
++    return "" if text.casefold() in ("null", "none", "<null>", "nan", "-") else text
++
++
++def key(value):
++    return clean(value).casefold()
++
++
++def _first(row, names):
++    row = dict(row or {})
++    for name in names:
++        value = clean(row.get(name))
++        if value:
++            return value
++    return ""
++
++
++@dataclass(frozen=True)
++class UnderbuildContext:
++    """Authoritative identity selected by the user for one Underbuild run."""
++
++    project_key: str
++    location_ids: tuple
++    location_name: str
++    stage: str
++
++    def __init__(self, project_key="", location_ids=(), location_name="", stage=""):
++        object.__setattr__(self, "project_key", clean(project_key))
++        object.__setattr__(
++            self,
++            "location_ids",
++            tuple(sorted({clean(value) for value in (location_ids or ()) if clean(value)})),
++        )
++        object.__setattr__(self, "location_name", clean(location_name))
++        object.__setattr__(self, "stage", stage_model.normalize_stage(stage))
++
++
++@dataclass(frozen=True)
++class CandidateDecision:
++    row: dict
++    accepted: bool
++    reason: str
++    source_kind: str
++
++
++@dataclass(frozen=True)
++class ResolutionResult:
++    accepted: list
++    rejected: list
++    decisions: list
++    rejection_counts: Counter
++
++
++def diagnostic_event(action, context, **fields):
++    """Return one structured, JSON-friendly Underbuild diagnostic event."""
++    context = (
++        context
++        if isinstance(context, UnderbuildContext)
++        else UnderbuildContext(**dict(context or {}))
++    )
++    event = {
++        "action": clean(action),
++        "project": context.project_key,
++        "location": context.location_name,
++        "location_ids": list(context.location_ids),
++        "stage": stage_model.stage_short_label(context.stage),
++    }
++    event.update(fields)
++    return event
++
++
++def _row_project(row):
++    return _first(row, ("project_key", "id_proyek", "project_id"))
++
++
++def _row_location_id(row):
++    return _first(row, ("id_lokasi", "location_id"))
++
++
++def _row_location_name(row):
++    return _first(
++        row,
++        ("lokasi_proyek", "nama_proyek", "project_location", "lokasi"),
++    )
++
++
++def candidate_decision(context, row, source_kind="work"):
++    """Decide one candidate and retain the exact rejection reason.
++
++    Populated canonical IDs are authoritative.  A display name may only rescue
++    a legacy row when that row does not carry a location ID at all.
++    """
++    context = context if isinstance(context, UnderbuildContext) else UnderbuildContext(**dict(context or {}))
++    row = dict(row or {})
++    kind = "existing" if key(source_kind) == "existing" else "work"
++
++    if not context.stage:
++        return CandidateDecision(row, False, "stage_missing", kind)
++
++    row_project = _row_project(row)
++    if context.project_key and row_project and key(row_project) != key(context.project_key):
++        return CandidateDecision(row, False, "project_mismatch", kind)
++
++    row_location_id = _row_location_id(row)
++    if context.project_key and not row_project and not row_location_id:
++        return CandidateDecision(row, False, "project_missing", kind)
++    wanted_location_ids = {key(value) for value in context.location_ids if key(value)}
++    if not wanted_location_ids:
++        return CandidateDecision(row, False, "location_unresolved", kind)
++    if row_location_id:
++        if key(row_location_id) not in wanted_location_ids:
++            return CandidateDecision(row, False, "location_mismatch", kind)
++    elif context.location_name:
++        if key(_row_location_name(row)) != key(context.location_name):
++            return CandidateDecision(row, False, "location_mismatch", kind)
++    elif wanted_location_ids:
++        return CandidateDecision(row, False, "location_missing", kind)
++
++    if kind != "existing":
++        row_stage = stage_model.feature_stage(row)
++        if row_stage != context.stage:
++            return CandidateDecision(row, False, "stage_mismatch", kind)
++
++    return CandidateDecision(row, True, "accepted", kind)
++
++
++def resolve_candidates(context, work_rows=(), existing_rows=()):
++    """Resolve work and Existing records through one deterministic path."""
++    decisions = []
++    for row in work_rows or ():
++        decisions.append(candidate_decision(context, row, "work"))
++    for row in existing_rows or ():
++        decisions.append(candidate_decision(context, row, "existing"))
++    accepted = [decision.row for decision in decisions if decision.accepted]
++    rejected = [decision for decision in decisions if not decision.accepted]
++    return ResolutionResult(
++        accepted=accepted,
++        rejected=rejected,
++        decisions=decisions,
++        rejection_counts=Counter(decision.reason for decision in rejected),
++    )
++
++
++def existing_carrier_reference(row):
++    """Return a persistent, non-FID reference for one Existing carrier."""
++    row = dict(row or {})
++    for field in ("feature_uuid", "uid_objek"):
++        value = clean(row.get(field))
++        if value:
++            return value
++    segment_id = clean(row.get("id_segmen"))
++    return "SEGMENT:{}".format(segment_id) if segment_id else ""
++
++
++def _carrier_edge_key(reference):
++    reference = clean(reference)
++    if not reference:
++        return ""
++    if key(reference).startswith("segment:"):
++        return "SEGMENT:{}".format(key(reference).split(":", 1)[1])
++    return "UUID:{}".format(key(reference))
++
++
++def host_edge_key(row):
++    """Stable identity of a host; provenance is identity only for overlays."""
++    row = dict(row or {})
++    explicit_host = clean(row.get("host_edge_uuid"))
++    if explicit_host:
++        return _carrier_edge_key(explicit_host)
++    source_kind = key(row.get("source_kind"))
++    if source_kind == "existing_overlay":
++        carrier = clean(row.get("parent_uid"))
++        if carrier:
++            return _carrier_edge_key(carrier)
++    if source_kind == "existing":
++        carrier = existing_carrier_reference(row)
++        if carrier:
++            return _carrier_edge_key(carrier)
++    for field in ("feature_uuid", "uid_objek"):
++        value = key(row.get(field))
++        if value:
++            return "UUID:{}".format(value)
++    segment_id = key(row.get("id_segmen"))
++    if segment_id:
++        return "SEGMENT:{}".format(segment_id)
++    layer_id = key(row.get("source_layer_id"))
++    fid = clean(row.get("fid"))
++    return "FID:{}:{}".format(layer_id, fid) if (layer_id or fid) else ""
++
++
++def _endpoint_identity(row, side):
++    prefix = "from" if side == "from" else "to"
++    legacy = "dari" if side == "from" else "ke"
++    uuid_value = _first(
++        row,
++        ("{}_feature_uuid".format(prefix), "{}_uuid".format(legacy)),
++    )
++    if uuid_value:
++        return "UUID:{}".format(key(uuid_value)), uuid_value
++    identifier = _first(row, ("{}_tiang".format(legacy), "{}_id".format(prefix)))
++    if identifier:
++        return "ID:{}".format(key(identifier)), identifier
++    return "", ""
++
++
++def _point_tuple(value):
++    try:
++        x, y = value
++        return float(x), float(y)
++    except Exception as exc:
++        raise ValueError("Endpoint geometry is missing or invalid.") from exc
++
++
++def _coordinate_node_id(point, tolerance):
++    scale = float(tolerance or 0.0)
++    if scale <= 0:
++        raise ValueError("Topology tolerance must be greater than zero.")
++    return "XY:{}:{}".format(
++        int(round(point[0] / scale)), int(round(point[1] / scale))
++    )
++
++
++def _node_for(graph, row, side, tolerance):
++    point = _point_tuple(row.get("{}_point".format(side)))
++    identity, raw_identity = _endpoint_identity(row, side)
++    coordinate_id = _coordinate_node_id(point, tolerance)
++
++    def nearby_nodes():
++        candidates = []
++        for candidate_id, candidate in graph["nodes"].items():
++            other = candidate.get("point")
++            distance = math.hypot(point[0] - other[0], point[1] - other[1])
++            if distance <= tolerance:
++                candidates.append((distance, candidate_id))
++        candidates.sort(key=lambda item: (item[0], item[1]))
++        return candidates
++
++    if identity:
++        node_id = graph["identity_nodes"].get(identity)
++        if node_id is None:
++            anonymous = [
++                item for item in nearby_nodes()
++                if not graph["nodes"][item[1]].get("identities")
++            ]
++            node_id = anonymous[0][1] if anonymous else identity
++            graph["identity_nodes"][identity] = node_id
++            if node_id not in graph["nodes"]:
++                graph["nodes"][node_id] = {
++                    "point": point,
++                    "identities": set(),
++                    "labels": [],
++                }
++        graph["nodes"][node_id]["identities"].add(identity)
++        if raw_identity and raw_identity not in graph["nodes"][node_id]["labels"]:
++            graph["nodes"][node_id]["labels"].append(raw_identity)
++        coordinate_owner = graph["coordinate_nodes"].get(coordinate_id)
++        if coordinate_owner is None and coordinate_id not in graph["ambiguous_coordinates"]:
++            graph["coordinate_nodes"][coordinate_id] = node_id
++        elif coordinate_owner != node_id:
++            graph["coordinate_nodes"].pop(coordinate_id, None)
++            graph["ambiguous_coordinates"].add(coordinate_id)
++        graph["aliases"][key(raw_identity)] = node_id
++        graph["aliases"][key(identity)] = node_id
++        return node_id
++
++    node_id = graph["coordinate_nodes"].get(coordinate_id)
++    if node_id is not None:
++        owner_point = graph["nodes"][node_id].get("point")
++        if math.hypot(
++                point[0] - owner_point[0], point[1] - owner_point[1]
++        ) > tolerance:
++            graph["coordinate_nodes"].pop(coordinate_id, None)
++            graph["ambiguous_coordinates"].add(coordinate_id)
++            node_id = None
++    if node_id is None:
++        nearby = nearby_nodes()
++        if len(nearby) == 1:
++            node_id = nearby[0][1]
++            if coordinate_id not in graph["ambiguous_coordinates"]:
++                graph["coordinate_nodes"][coordinate_id] = node_id
++    if node_id is None:
++        node_id = coordinate_id
++        suffix = 1
++        while node_id in graph["nodes"]:
++            suffix += 1
++            node_id = "{}:{}".format(coordinate_id, suffix)
++        if coordinate_id not in graph["ambiguous_coordinates"]:
++            graph["coordinate_nodes"][coordinate_id] = node_id
++        graph["nodes"][node_id] = {
++            "point": point, "identities": set(), "labels": [],
++        }
++    graph["aliases"][key(coordinate_id)] = node_id
++    return node_id
++
++
++def build_topology(records=(), tolerance=0.75):
++    """Build one deterministic graph from already-resolved work/Existing rows."""
++    tolerance = float(tolerance or 0.0)
++    if tolerance <= 0:
++        raise ValueError("Topology tolerance must be greater than zero.")
++    graph = {
++        "nodes": {}, "edges": {}, "adjacency": {}, "aliases": {},
++        "identity_nodes": {}, "coordinate_nodes": {},
++        "ambiguous_coordinates": set(),
++        "invalid_records": [], "tolerance": tolerance,
++    }
++    for source_index, source in enumerate(records or ()):
++        row = dict(source or {})
++        edge_key = host_edge_key(row)
++        if not edge_key:
++            graph["invalid_records"].append((source_index, "edge_identity_missing", row))
++            continue
++        try:
++            start = _node_for(graph, row, "from", tolerance)
++            end = _node_for(graph, row, "to", tolerance)
++            length = float(row.get("length") or 0.0)
++            if not math.isfinite(length) or length < 0:
++                raise ValueError("Edge length must be finite and non-negative.")
++            if start == end:
++                raise ValueError("Edge endpoints resolve to the same node.")
++        except Exception as exc:
++            graph["invalid_records"].append((source_index, clean(exc), row))
++            continue
++
++        edge = graph["edges"].get(edge_key)
++        if edge is None:
++            edge = {
++                "a": start,
++                "b": end,
++                "length": length,
++                "has_jtm": bool(row.get("has_jtm")),
++                "has_jtr": bool(row.get("has_jtr")),
++                "underbuild": bool(row.get("is_underbuild") or row.get("underbuild")),
++                "underbuild_identified": bool(clean(row.get("underbuild_path_id"))),
++                "records": [row],
++                "geometry": row.get("geometry"),
++            }
++            graph["edges"][edge_key] = edge
++        else:
++            if {edge["a"], edge["b"]} != {start, end}:
++                graph["invalid_records"].append(
++                    (source_index, "host_edge_endpoint_conflict", row)
++                )
++                continue
++            edge["length"] = max(float(edge.get("length") or 0.0), length)
++            edge["has_jtm"] = bool(edge.get("has_jtm") or row.get("has_jtm"))
++            edge["has_jtr"] = bool(edge.get("has_jtr") or row.get("has_jtr"))
++            edge["underbuild"] = bool(
++                edge.get("underbuild")
++                or row.get("is_underbuild")
++                or row.get("underbuild")
++            )
++            edge["underbuild_identified"] = bool(
++                edge.get("underbuild_identified")
++                or clean(row.get("underbuild_path_id"))
++            )
++            edge["records"].append(row)
++            if edge.get("geometry") is None and row.get("geometry") is not None:
++                edge["geometry"] = row.get("geometry")
++
++    adjacency = {node_id: [] for node_id in graph["nodes"]}
++    for edge_key, edge in graph["edges"].items():
++        if not edge.get("has_jtm"):
++            continue
++        adjacency[edge["a"]].append((edge["b"], edge_key))
++        adjacency[edge["b"]].append((edge["a"], edge_key))
++    for values in adjacency.values():
++        values.sort(key=lambda item: (item[1], item[0]))
++    graph["adjacency"] = adjacency
++    return graph
++
++
++def _resolve_node(graph, node):
++    if node in (graph or {}).get("nodes", {}):
++        return node
++    return (graph or {}).get("aliases", {}).get(key(node))
++
++
++def shortest_path(graph, start, end):
++    """Return the deterministic shortest JTM path as host edge identities."""
++    start = _resolve_node(graph, start)
++    end = _resolve_node(graph, end)
++    if start is None or end is None or start == end:
++        return []
++    heap = [(0.0, tuple(), start)]
++    best = {start: (0.0, tuple())}
++    while heap:
++        distance, path, node = heapq.heappop(heap)
++        if best.get(node) != (distance, path):
++            continue
++        if node == end:
++            return list(path)
++        for neighbor, edge_key in graph.get("adjacency", {}).get(node, ()):
++            edge = graph["edges"][edge_key]
++            candidate = (distance + float(edge.get("length") or 0.0), path + (edge_key,))
++            if neighbor not in best or candidate < best[neighbor]:
++                best[neighbor] = candidate
++                heapq.heappush(heap, (candidate[0], candidate[1], neighbor))
++    return []
++
++
++def shortest_path_count(graph, start, end, limit=3):
++    """Count equal shortest JTM routes, capped for UI ambiguity decisions."""
++    start = _resolve_node(graph, start)
++    end = _resolve_node(graph, end)
++    if start is None or end is None:
++        return 0
++    distances = {start: 0.0}
++    counts = {start: 1}
++    heap = [(0.0, start)]
++    epsilon = 1e-9
++    while heap:
++        distance, node = heapq.heappop(heap)
++        if distance > distances.get(node, float("inf")) + epsilon:
++            continue
++        for neighbor, edge_key in graph.get("adjacency", {}).get(node, ()):
++            candidate = distance + float(graph["edges"][edge_key].get("length") or 0.0)
++            previous = distances.get(neighbor, float("inf"))
++            if candidate < previous - epsilon:
++                distances[neighbor] = candidate
++                counts[neighbor] = counts.get(node, 1)
++                heapq.heappush(heap, (candidate, neighbor))
++            elif abs(candidate - previous) <= epsilon:
++                counts[neighbor] = min(
++                    max(1, int(limit or 1)),
++                    counts.get(neighbor, 0) + counts.get(node, 1),
++                )
++    return int(counts.get(end, 0))
++
++
++@dataclass(frozen=True)
++class UnderbuildPartition:
++    covered: list
++    pending: list
++    covered_length: float
++    pending_length: float
++    legacy_unidentified: list
++    legacy_unidentified_length: float
++
++
++def partition_underbuild_edges(graph, path):
++    """Split a selected path into existing and new Underbuild host edges."""
++    covered, pending, legacy_unidentified = [], [], []
++    covered_length = pending_length = legacy_unidentified_length = 0.0
++    for edge_key in path or ():
++        edge = (graph or {}).get("edges", {}).get(edge_key)
++        if edge is None:
++            raise ValueError("Selected path references an unknown host edge.")
++        length = float(edge.get("length") or 0.0)
++        if edge.get("underbuild") and edge.get("underbuild_identified"):
++            covered.append(edge_key)
++            covered_length += length
++        else:
++            pending.append(edge_key)
++            pending_length += length
++            if edge.get("underbuild"):
++                legacy_unidentified.append(edge_key)
++                legacy_unidentified_length += length
++    return UnderbuildPartition(
++        covered=covered,
++        pending=pending,
++        covered_length=covered_length,
++        pending_length=pending_length,
++        legacy_unidentified=legacy_unidentified,
++        legacy_unidentified_length=legacy_unidentified_length,
++    )
++
++
++def existing_underbuild_path_ids(graph, path):
++    """Return the one reusable route identity or reject an ambiguous merge."""
++    identities = {}
++    for edge_key in path or ():
++        edge = (graph or {}).get("edges", {}).get(edge_key)
++        if edge is None:
++            raise ValueError("Selected path references an unknown host edge.")
++        if not edge.get("underbuild"):
++            continue
++        for row in edge.get("records", ()):
++            path_id = clean(row.get("underbuild_path_id"))
++            if path_id:
++                identities.setdefault(key(path_id), path_id)
++    if len(identities) > 1:
++        raise ValueError(
++            "Jalur terpilih menghubungkan lebih dari satu identitas "
++            "Underbuild. Pilih satu perpanjangan jalur pada satu waktu."
++        )
++    return tuple(
++        identities[name] for name in sorted(identities)
++    )
++
++
++def validate_selected_path(graph, path, start=None, end=None, context=None):
++    """Validate that a write path is one connected, scoped JTM edge chain."""
++    path = list(path or ())
++    if not path:
++        raise ValueError("Jalur Underbuild kosong.")
++    if len(set(path)) != len(path):
++        raise ValueError("Jalur Underbuild memuat edge duplikat.")
++
++    edges = (graph or {}).get("edges", {})
++    for edge_key in path:
++        edge = edges.get(edge_key)
++        if edge is None:
++            raise ValueError("Jalur Underbuild merujuk edge yang tidak dikenal.")
++        if not bool(edge.get("has_jtm") or edge.get("jtm")):
++            raise ValueError("Jalur Underbuild memuat edge yang bukan host JTM.")
++        if context is not None:
++            for row in edge.get("records", ()):
++                decision = candidate_decision(
++                    context, row, row.get("source_kind", "work")
++                )
++                if not decision.accepted:
++                    raise ValueError(
++                        "Jalur Underbuild keluar dari scope aktif: {}."
++                        .format(decision.reason)
++                    )
++
++    wanted_start = _resolve_node(graph, start) if start is not None else None
++    wanted_end = _resolve_node(graph, end) if end is not None else None
++    first = edges[path[0]]
++    if wanted_start is None:
++        current = first["a"]
++    elif wanted_start in (first["a"], first["b"]):
++        current = wanted_start
++    else:
++        raise ValueError("Jalur Underbuild tidak dimulai pada node terpilih.")
++
++    for edge_key in path:
++        edge = edges[edge_key]
++        if current == edge["a"]:
++            current = edge["b"]
++        elif current == edge["b"]:
++            current = edge["a"]
++        else:
++            raise ValueError("Urutan edge jalur Underbuild tidak tersambung.")
++    if wanted_end is not None and current != wanted_end:
++        raise ValueError("Jalur Underbuild tidak berakhir pada node terpilih.")
++    return path
