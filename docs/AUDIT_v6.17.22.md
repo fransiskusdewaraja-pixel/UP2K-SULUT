@@ -33,7 +33,8 @@ Engine tersebut menyediakan:
 - graph node/edge dengan UUID host stabil dan fallback spasial toleran hanya
   saat identitas endpoint tidak tersedia;
 - pencarian path deterministik, deteksi rute terpendek ambigu, validasi path,
-  deduplikasi host/overlay, serta partisi “sudah” vs “akan ditambahkan”.
+  deduplikasi host/overlay, pemulihan identitas rute legacy, serta partisi
+  “sudah” vs “akan ditambahkan”.
 
 `UnderbuildRangeDialog` kini hanya menjadi adapter QGIS: membaca feature dari
 layer tahap yang dipilih dan `JARINGAN_EKSISTING`, menyerahkannya kepada satu
@@ -51,7 +52,18 @@ resolver, menampilkan preview, lalu menulis hasil yang tervalidasi melalui
   tanpa identitas dapat memakai fallback spasial dalam tolerance.
 - Jalur JTR-only tidak dapat menjadi shortcut pencarian host JTM.
 - Reapply pada edge yang sama tidak menulis ulang; partial Underbuild hanya
-  menulis edge yang belum tercakup.
+  menulis edge yang belum tercakup. Perpanjangan memakai kembali satu
+  `underbuild_path_id` yang bersebelahan agar node tembus tidak berubah menjadi
+  dua terminasi TR-3; pilihan yang menjembatani dua ID rute ditolak sebelum
+  transaksi.
+- `parent_uid` tetap diperlakukan sebagai provenance pada feature kerja.
+  Hanya overlay Existing eksplisit yang memakainya sebagai identitas carrier;
+  Existing legacy memakai `id_segmen` stabil bila UUID tidak tersedia.
+- Bucket koordinat hanya mempercepat pencarian. Keputusan gabung node anonim
+  selalu memeriksa jarak Euclidean aktual terhadap tolerance.
+- Lokasi yang tidak dapat diresolusikan ke ID kanonik ditolak sebelum graph
+  atau transaksi dibuat; dialog yang dipakai ulang selalu membaca lokasi F11
+  terbaru dari dashboard sebenarnya.
 - Ringkasan menampilkan panjang “Sudah Underbuild” dan “Akan Ditambahkan”.
 - Kandidat klik yang bertumpuk diurutkan deterministik dan meminta pemilihan.
 - ESC, Tutup, dan Hapus Hasil membersihkan rubber band, marker, map tool, serta
@@ -77,10 +89,9 @@ masuk regression suite.
 
 ## Verifikasi
 
-- Test Underbuild baru: 37 lulus, 0 gagal.
-- Regression terarah Underbuild/Existing/konstruksi/BOQ/tahap/jarak/DXF/style:
-  718 lulus setelah kontrak lama diselaraskan dengan resolver baru.
-- Regression penuh: 3.507 lulus, 6 dilewati, 0 gagal.
+- Test Underbuild baru: 49 lulus, 0 gagal.
+- Regression terarah Underbuild/Existing/terminasi/tahap/DXF: 395 lulus.
+- Regression penuh: 3.519 lulus, 6 dilewati, 0 gagal.
 - `py_compile` dan `git diff --check`: lulus.
 
 Tes otomatis menggunakan engine bebas QGIS dan pemeriksaan kontrak source.
