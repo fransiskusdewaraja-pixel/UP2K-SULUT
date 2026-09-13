@@ -4,18 +4,23 @@ Sistem Informasi Gambar, Analisis, dan Monitoring Jaringan Kelistrikan untuk QGI
 
 ## Rilis terbaru
 
-**v6.17.21 — Topologi Underbuild pada JTM Eksisting**
+**v6.17.22 — Rebuild Tambah Underbuild berbasis topologi**
 
-- Carrier JTM Eksisting tetap merah solid setelah underbuild ditambahkan.
-- Overlay tahap hanya menggambar JTR; tidak menggambar ulang JTM Existing sebagai garis putus-putus.
-- Konstruksi bawah dihitung dari graph, degree, dan sudut: TR-3 hanya pada terminasi.
-- BOQ memuat TR-1/TR-2/TR-3/TR-5 dan tipe lain sesuai hasil topologi, bukan hanya dua endpoint.
-- JARINGAN_EKSISTING bukan bukti tarikan awal. TM-4X hanya muncul bila ada tarikan awal JTM Rencana/Realisasi yang nyata.
-- Nilai TM-4X/TR-3 stale dari v6.17.20 dibersihkan saat Hitung Ulang.
-- Scope Judul Proyek dan Lokasi Proyek tetap mencegah lokasi berdekatan tercampur.
-- Regression suite: 3.474 test lulus, 6 dilewati, 0 gagal.
+- Satu resolver membaca Rencana Awal, Rencana Akhir, Realisasi, dan Existing
+  berdasarkan Project + Lokasi Proyek + Tahap + UUID, bukan visibility layer.
+- Jaringan tahap dan Existing dibangun menjadi satu graph tanpa memutasi
+  `DATA_LAYER_MAP` atau menggabungkan graph berdasarkan tebakan koordinat.
+- Path JTM deterministik, kandidat bertumpuk dapat dipilih, dan JTR-only tidak
+  dapat menjadi shortcut.
+- Reapply idempotent; partial Underbuild hanya menulis bentang yang belum ada.
+- Preview menampilkan “Sudah Underbuild” dan “Akan Ditambahkan”, serta bersih
+  pada ESC/Tutup/Hapus Hasil.
+- Validasi write dan structured transaction logging mencakup rollback.
+- Existing tetap read-only sebagai carrier; style solid, aturan TR/BOQ/TM-4X,
+  satu Jarak (m), Hapus Underbuild, dan DXF tetap terlindungi regresi.
+- Regression suite: 3.507 test lulus, 6 dilewati, 0 gagal.
 
-Patch sumber: [releases/SIGAMON_v6.17.21.patch](releases/SIGAMON_v6.17.21.patch).
+Patch sumber: [releases/SIGAMON_v6.17.22.patch](releases/SIGAMON_v6.17.22.patch).
 
-Audit: [docs/AUDIT_v6.17.21.md](docs/AUDIT_v6.17.21.md)  
-Matriks test: [docs/TEST_MATRIX_v6.17.21.md](docs/TEST_MATRIX_v6.17.21.md)
+Audit: [docs/AUDIT_v6.17.22.md](docs/AUDIT_v6.17.22.md)  
+Matriks test: [docs/TEST_MATRIX_v6.17.22.md](docs/TEST_MATRIX_v6.17.22.md)
